@@ -45,11 +45,11 @@ final class CinemaControlView: NSView {
         titleLabel.stringValue = player?.url.lastPathComponent ?? ""
         addSubview(titleLabel)
 
-        configure(playButton, symbol: "play.fill", tooltip: "Играть / пауза", action: #selector(togglePlay))
+        configure(playButton, symbol: "play.fill", tooltip: "Play / pause", action: #selector(togglePlay))
         playButton.frame = NSRect(x: margin, y: 62, width: 30, height: 26)
         addSubview(playButton)
 
-        configure(stopButton, symbol: "stop.fill", tooltip: "Стоп: закрыть кинотеатр", action: #selector(stop))
+        configure(stopButton, symbol: "stop.fill", tooltip: "Stop: close the cinema", action: #selector(stop))
         stopButton.frame = NSRect(x: margin + 36, y: 62, width: 30, height: 26)
         addSubview(stopButton)
 
@@ -66,7 +66,7 @@ final class CinemaControlView: NSView {
         addSubview(seekSlider)
 
         volumeIcon.frame = NSRect(x: margin, y: 10, width: 18, height: 18)
-        volumeIcon.image = NSImage(systemSymbolName: "speaker.wave.2.fill", accessibilityDescription: "Громкость")
+        volumeIcon.image = NSImage(systemSymbolName: "speaker.wave.2.fill", accessibilityDescription: "Volume")
         volumeIcon.contentTintColor = .secondaryLabelColor
         addSubview(volumeIcon)
 
@@ -104,7 +104,7 @@ final class CinemaControlView: NSView {
     private func refresh() {
         guard let player else { return }
         let symbol = player.isPlaying ? "pause.fill" : "play.fill"
-        playButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Играть / пауза")
+        playButton.image = NSImage(systemSymbolName: symbol, accessibilityDescription: "Play / pause")
 
         let duration = player.duration
         let current = player.currentTime

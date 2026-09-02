@@ -13,7 +13,6 @@ Fork of [DannyDesert/XReal-Ultrawide](https://github.com/DannyDesert/XReal-Ultra
 - Automatic best native display mode for the glasses (1920×1080@120) at launch, on hot-plug and after leaving 3D; menu item shows the current mode.
 - Unplug handling: output windows hide the instant the glasses' display vanishes, sound stops, every mode shuts down, the app returns to the extra-display mode. Glasses that reconnect in 3D are put back to 2D.
 - Development launch arguments `--stereo` and `--cinema <file>`.
-- Russian UI.
 
 ### Fixed
 - Output window was placed half off the glasses' screen: `NSWindow(contentRect:…, screen:)` takes a rect relative to that screen, not global coordinates (also affected the original spatial mode).

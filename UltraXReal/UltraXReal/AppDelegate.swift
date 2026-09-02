@@ -11,10 +11,10 @@ enum GlassesMode: Int {
 
     var title: String {
         switch self {
-        case .extraDisplay: return "Дополнительный дисплей"
-        case .mirror: return "Зеркало основного дисплея"
-        case .chairs: return "3D-стулья"
-        case .cinema: return "Кинотеатр…"
+        case .extraDisplay: return "Extended Display"
+        case .mirror: return "Mirror Main Display"
+        case .chairs: return "3D Chairs"
+        case .cinema: return "Cinema…"
         }
     }
 
@@ -89,7 +89,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for candidate in [GlassesMode.extraDisplay, .mirror, .chairs, .cinema] {
             var title = candidate.title
             if candidate == .cinema, mode == .cinema, let cinemaURL {
-                title = "Кинотеатр: \(cinemaURL.lastPathComponent)"
+                title = "Cinema: \(cinemaURL.lastPathComponent)"
             }
             let item = NSMenuItem(title: title, action: #selector(selectMode(_:)), keyEquivalent: "\(candidate.rawValue)")
             item.target = self
@@ -97,7 +97,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             item.state = candidate == mode ? .on : .off
             if candidate.usesStereo && !imuAvailable && candidate != mode {
                 item.isEnabled = false
-                item.toolTip = "Подключите XReal Air по USB-C (IMU не обнаружен)"
+                item.toolTip = "Connect XReal Air via USB-C (IMU not detected)"
             }
             menu.addItem(item)
         }
@@ -120,7 +120,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         // Recenter (stereo mode)
-        let recenterItem = NSMenuItem(title: "Отцентровать (Cmd+Shift+R)", action: #selector(recenter), keyEquivalent: "")
+        let recenterItem = NSMenuItem(title: "Recenter (Cmd+Shift+R)", action: #selector(recenter), keyEquivalent: "")
         recenterItem.target = self
         recenterItem.isEnabled = isStereoActive
         menu.addItem(recenterItem)
@@ -129,9 +129,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let glassesID = DisplayMirrorHelper.findXRealDisplay()
         let glassesTitle: String
         if let glassesID, let displayMode = CGDisplayCopyDisplayMode(glassesID) {
-            glassesTitle = "Очки: \(displayMode.pixelWidth)x\(displayMode.pixelHeight)@\(Int(displayMode.refreshRate)) — выставить максимум"
+            glassesTitle = "Glasses: \(displayMode.pixelWidth)x\(displayMode.pixelHeight)@\(Int(displayMode.refreshRate)) — Set Best Mode"
         } else {
-            glassesTitle = "Очки: дисплей не найден"
+            glassesTitle = "Glasses: display not found"
         }
         let glassesItem = NSMenuItem(title: glassesTitle, action: #selector(applyBestGlassesMode), keyEquivalent: "")
         glassesItem.target = self
@@ -143,24 +143,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Status
         var statusLines: [String] = []
         if let renderer = stereoRenderer {
-            let stereo = renderer.eyeCount == 2 ? "SBS" : "моно, очки не переключились в 3D"
-            statusLines.append("Стерео: активно (\(renderer.fps) к/с, \(stereo))")
-            statusLines.append("IMU: \(imuService?.isConnected == true ? "подключён" : "отключён")")
+            let stereo = renderer.eyeCount == 2 ? "SBS" : "mono, glasses did not switch to 3D"
+            statusLines.append("Stereo: active (\(renderer.fps) fps, \(stereo))")
+            statusLines.append("IMU: \(imuService?.isConnected == true ? "connected" : "disconnected")")
         } else if let stereoStatus {
-            statusLines.append("Стерео: \(stereoStatus)")
+            statusLines.append("Stereo: \(stereoStatus)")
         } else if mode == .cinema {
             if let cinemaPlayer {
-                statusLines.append("Звук: \(cinemaPlayer.audioDeviceName ?? "системный выход по умолчанию")")
-                statusLines.append("Двойной стук по очкам: пауза / продолжить")
+                statusLines.append("Audio: \(cinemaPlayer.audioDeviceName ?? "system default output")")
+                statusLines.append("Double-tap the glasses: pause / resume")
             } else {
-                statusLines.append("Кинотеатр: дисплей очков не найден")
+                statusLines.append("Cinema: glasses display not found")
             }
         } else if mode == .mirror {
-            statusLines.append(mirroredGlassesID != nil ? "Зеркало: основной дисплей → очки" : "Зеркало: очки не найдены")
+            statusLines.append(mirroredGlassesID != nil ? "Mirror: main display → glasses" : "Mirror: glasses not found")
         } else if glassesDisconnectedNotice {
-            statusLines.append("Очки отключены, режимы выключены")
+            statusLines.append("Glasses unplugged, modes stopped")
         } else if glassesID == nil {
-            statusLines.append("Подсказка: подключите XReal Air по USB-C (\(imuAvailable ? "IMU обнаружен" : "IMU не обнаружен"))")
+            statusLines.append("Tip: connect XReal Air via USB-C (\(imuAvailable ? "IMU detected" : "IMU not detected"))")
         }
         if !statusLines.isEmpty {
             for line in statusLines {
@@ -171,18 +171,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(NSMenuItem.separator())
         }
 
-        let loginItem = NSMenuItem(title: "Запускать при входе", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
+        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
         loginItem.target = self
         loginItem.state = settings.launchAtLogin ? .on : .off
         menu.addItem(loginItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        let aboutItem = NSMenuItem(title: "О программе UltraXReal", action: #selector(showAbout), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "About UltraXReal", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
         menu.addItem(aboutItem)
 
-        let quitItem = NSMenuItem(title: "Выйти", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
@@ -316,8 +316,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func chooseVideoFile() -> URL? {
         let panel = NSOpenPanel()
-        panel.title = "Выберите видео для кинотеатра"
-        panel.prompt = "Смотреть"
+        panel.title = "Choose a video for the cinema"
+        panel.prompt = "Watch"
         panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
         panel.allowsMultipleSelection = false
         panel.canChooseDirectories = false
@@ -336,7 +336,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             alreadySBS = false
         }
 
-        stereoStatus = "переключаю очки в 3D…"
+        stereoStatus = "switching glasses to 3D…"
         buildMenu()
         stereoEnableGeneration += 1
         let generation = stereoEnableGeneration
@@ -354,7 +354,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if !switched {
                     print("[Stereo] Glasses did not switch to SBS, continuing in mono")
                 }
-                self.stereoStatus = switched ? "жду переподключения дисплея (до минуты)…" : "очки не переключились в 3D, запускаю моно"
+                self.stereoStatus = switched ? "waiting for the display to reconnect (up to a minute)…" : "glasses did not switch to 3D, starting mono"
                 self.buildMenu()
                 // The glasses take 8–25 s to come back as a 3840x1080 display.
                 self.waitForGlassesDisplay(minWidth: switched ? 3000 : 0, attempts: 60) { [weak self] in
@@ -392,7 +392,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         let renderer = StereoSceneRenderer(imuService: imu)
         guard renderer.start() else {
-            stereoStatus = "не найден дисплей очков"
+            stereoStatus = "glasses display not found"
             imu.stop()
             imuService = nil
             restoreGlassesDisplayMode()
@@ -540,7 +540,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .applicationName: "UltraXReal",
             .applicationVersion: "3.0.0",
             .credits: NSAttributedString(
-                string: "Открытая программа для очков XReal Air.\nРежимы: дополнительный дисплей, зеркало, 3D-стулья, кинотеатр.\nhttps://github.com/DannyDesert/XReal-Ultrawide",
+                string: "Open-source app for XReal Air glasses.\nModes: extended display, mirror, 3D chairs, cinema.\nhttps://github.com/AlexeySpiridonov/XReal-Ultrawide-cinemaEd",
                 attributes: [.font: NSFont.systemFont(ofSize: 11)]
             )
         ])

@@ -7,7 +7,6 @@ The original project turned the glasses into a static ultrawide monitor and a he
 This edition keeps its foundation (menu bar app, vendored IMU driver, glasses detection) and replaces the
 feature set with four explicit modes, adds control of the glasses' own display mode over USB HID, real
 side-by-side stereo rendering, a video player with sound routed into the glasses, and tap gestures.
-The UI is in Russian.
 
 ---
 
@@ -17,10 +16,10 @@ Exactly one mode is active at a time. Switch from the menu bar icon (⌘1 … �
 
 | # | Mode | What it does |
 |---|------|--------------|
-| 1 | **Дополнительный дисплей** | The glasses are a plain extended display at their native 1920×1080@120. Default state. |
-| 2 | **Зеркало основного дисплея** | The glasses mirror the built-in display. |
-| 3 | **3D-стулья** | Stereo demo: the glasses switch to side-by-side 3D (3840×1080), you stand in the middle of a ring of twelve different chairs, head rotation moves the view. ⌘⇧R recenters. |
-| 4 | **Кинотеатр…** | Pick a video file. It plays fullscreen on the glasses only, with sound routed to the glasses' speakers. Transport panel in the menu (play/pause, stop, seek, volume). **Double-tap the glasses to pause/resume.** |
+| 1 | **Extended Display** | The glasses are a plain extended display at their native 1920×1080@120. Default state. |
+| 2 | **Mirror Main Display** | The glasses mirror the built-in display. |
+| 3 | **3D Chairs** | Stereo demo: the glasses switch to side-by-side 3D (3840×1080), you stand in the middle of a ring of twelve different chairs, head rotation moves the view. ⌘⇧R recenters. |
+| 4 | **Cinema…** | Pick a video file. It plays fullscreen on the glasses only, with sound routed to the glasses' speakers. Transport panel in the menu (play/pause, stop, seek, volume). **Double-tap the glasses to pause/resume.** |
 
 Always on:
 

@@ -250,7 +250,7 @@
 			};
 			buildConfigurationList = A70000010000000000000002 /* Build configuration list for PBXProject "UltraXReal" */;
 			compatibilityVersion = "Xcode 14.0";
-			developmentRegion = ru;
+			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
