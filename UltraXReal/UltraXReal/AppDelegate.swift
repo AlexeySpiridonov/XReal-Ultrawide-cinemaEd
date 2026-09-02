@@ -31,7 +31,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Mirror mode
     private var mirroredGlassesID: CGDirectDisplayID?
 
-    // Stereo mode (chairs)
+    // Stereo mode (3D demo)
     private var imuService: XRealIMUService?
     private var stereoRenderer: StereoSceneRenderer?
     private var stereoStatus: String?
@@ -61,7 +61,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DisplayMirrorHelper.applyBestModeToXReal()
         buildMenu()
 
-        // Launch arguments for development: `--stereo` starts the chairs, `--cinema <file>` the cinema.
+        // Launch arguments for development: `--stereo` starts the 3D demo, `--cinema <file>` the cinema.
         let args = CommandLine.arguments
         if args.contains("--stereo") {
             switchTo(.demo)
@@ -338,7 +338,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
-    // MARK: - Mode 3: stereo chairs
+    // MARK: - Mode 4: stereo 3D demo
 
     private func enableStereo() {
         // Already side-by-side if the glasses currently present a 3840-wide panel.
