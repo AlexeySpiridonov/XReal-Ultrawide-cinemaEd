@@ -1,126 +1,64 @@
 # UltraXReal — Cinema Edition
 
-**macOS menu bar app for XReal Air glasses: extended display, mirror, private cinema and a stereo 3D demo.**
-
-A fork of [DannyDesert/XReal-Ultrawide](https://github.com/DannyDesert/XReal-Ultrawide) (UltraXReal v2.0.0).
-The original project turned the glasses into a static ultrawide monitor and a head-tracked floating display.
-This edition keeps its foundation (menu bar app, vendored IMU driver, glasses detection) and replaces the
-feature set with four explicit modes, adds control of the glasses' own display mode over USB HID, real
-side-by-side stereo rendering, a video player with sound routed into the glasses, and tap gestures.
-
----
+macOS menu bar app for XReal Air glasses. A fork of [DannyDesert/XReal-Ultrawide](https://github.com/DannyDesert/XReal-Ultrawide)
+that replaces the virtual ultrawide display with four explicit modes and adds USB control of the glasses.
 
 ## Modes
 
-Exactly one mode is active at a time. Switch from the menu bar icon (⌘1 … ⌘4).
-
-| # | Mode | What it does |
+| ⌘ | Mode | What it does |
 |---|------|--------------|
-| 1 | **Extended Display** | The glasses are a plain extended display at their native 1920×1080@120. Default state. |
+| 1 | **Extended Display** | The glasses are a plain extended display at native 1920×1080@120. Default. |
 | 2 | **Mirror Main Display** | The glasses mirror the built-in display. |
-| 3 | **Cinema…** | Pick a video file. It plays fullscreen on the glasses only, with sound routed to the glasses' speakers. Transport panel in the menu (play/pause, stop, seek, volume). **Double-tap the glasses to pause/resume.** |
-| 4 | **Demo: 3D** | Stereo demo: the glasses switch to side-by-side 3D (3840×1080) and you stand in the middle of Stonehenge — procedural sky, clouds, grass, rough sarsen stones with lintels, planar sun shadows. No textures, everything is generated in the shaders. Head rotation moves the view, ⌘⇧R recenters. |
+| 3 | **Cinema…** | Pick a video: it plays fullscreen on the glasses only, sound goes to the glasses' speakers. Transport panel in the menu; **double-tap the glasses** to pause/resume. |
+| 4 | **Demo: 3D** | The glasses switch to side-by-side 3D and you stand inside Stonehenge (procedural sky, grass, stones, shadows, no textures). Turn your head to look around, ⌘⇧R recenters. |
 
-Always on:
-
-- The glasses are switched to their best native mode (1920×1080@120 on Air 2 Pro) at launch, on hot-plug and when leaving stereo.
-- Unplugging the glasses shuts everything down instantly: output windows hide before macOS can move them to the Mac's display, sound stops, the app returns to mode 1.
-- Glasses that come back in 3D mode (unplugged mid-stereo) are put back to 2D automatically.
-
----
+Always on: the glasses are set to their best native mode on launch and hot-plug; unplugging them
+shuts everything down instantly; glasses left in 3D (crash, kill) are put back to 2D.
 
 ## How it works
 
-- **Display mode of the glasses** — `Vendor/xreal-imu/device_mcu.c` talks to the glasses' MCU over USB HID
-  (packet format and commands from [nrealAirLinuxDriver](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver)):
-  read/write display mode (2D ↔ side-by-side 3D) and brightness. Verified on Air 2 Pro: code `0x03` = SBS 3840×1080@60,
-  the factory 2D code is `0x0B` (1920×1080@120). The app remembers the 2D code it read and restores exactly that.
-- **Head tracking** — the vendored driver from [xrealair-sdk-macos](https://github.com/adidoes/xrealair-sdk-macos)
-  reads the ICM-42688-P IMU and runs the [Fusion](https://github.com/xioTechnologies/Fusion) Madgwick filter.
-  `StereoSceneRenderer` converts the quaternion to yaw/pitch/roll with per-axis sign switches.
-- **Stereo** — one Metal pass per eye into the left/right half of a fullscreen window on the glasses; the glasses show each half to one eye. IPD 63 mm, ~23° vertical FOV. The Stonehenge scene is baked into one vertex buffer (rough, tapered blocks laid out on the real plan: sarsen circle, trilithon horseshoe, bluestones, altar, heel stone); sky, grass and stone surfaces are procedural noise in the fragment shaders; shadows are the stones projected onto the ground along the sun direction.
-- **Cinema** — `AVPlayer` + `AVPlayerLayer` in a borderless window on the glasses' screen; `audioOutputDeviceUniqueID` points at the glasses' USB audio device found via CoreAudio.
-- **Tap detection** — linear acceleration (gravity removed) from the IMU; a sharp peak above 0.6 g is a tap, two within 0.5 s is a double tap.
-- **Presence watchdog** — IOKit registry query for HID devices with the XReal vendor ID (deliberately not hidapi, which is not thread-safe).
-
----
+- **Glasses display mode** over USB HID (`device_mcu.c`, `XRealMCUService`): 2D ↔ side-by-side 3D, brightness.
+  Verified on Air 2 Pro: `0x03` = SBS 3840×1080@60, `0x0B` = factory 2D 1920×1080@120.
+- **Head tracking**: vendored IMU driver ([xrealair-sdk-macos](https://github.com/adidoes/xrealair-sdk-macos)) +
+  [Fusion](https://github.com/xioTechnologies/Fusion) Madgwick filter; auto-reconnects.
+- **Stereo**: one Metal pass per eye into each half of a fullscreen window on the glasses.
+- **Cinema**: `AVPlayer` in a window on the glasses' screen, audio routed via `audioOutputDeviceUniqueID`.
+- **Taps**: linear-acceleration peaks from the IMU.
+- All hidapi traffic is serialised on one queue; presence is detected through the IOKit registry.
 
 ## Requirements
 
-- macOS 13.0+ (developed and tested on macOS 26 / Apple Silicon)
-- XReal Air 2 Pro (tested). Air, Air 2 and Air 2 Ultra are recognised by the driver but the MCU display-mode codes were only verified on Air 2 Pro.
-- Xcode 15+ with the Metal toolchain (`xcodebuild -downloadComponent MetalToolchain` if missing)
-
-When the glasses (re)connect, macOS 26 asks *"What do you want to show on Air 2 Pro?"* — choose **Extended Display** and tick **Set as Default**. The app needs the glasses as a separate screen.
+- macOS 13+ (tested on macOS 26, Apple Silicon), XReal Air 2 Pro (other Air models recognised, MCU codes unverified).
+- When macOS asks *"What do you want to show on Air 2 Pro?"*, choose **Extended Display** and **Set as Default**.
 
 ## Build
 
 ```bash
 git clone https://github.com/AlexeySpiridonov/XReal-Ultrawide-cinemaEd.git
-cd XReal-Ultrawide-cinemaEd/UltraXReal
-open UltraXReal.xcodeproj
+open XReal-Ultrawide-cinemaEd/UltraXReal/UltraXReal.xcodeproj
 ```
 
-Select *Sign to Run Locally*, build and run. The icon appears in the menu bar (no dock icon).
-
-Development launch arguments: `--stereo` starts the chairs right away, `--cinema <file>` starts the cinema with that file.
-
----
-
-## Project layout
-
-```
-UltraXReal/UltraXReal/
-├── UltraXRealApp.swift            # entry point
-├── AppDelegate.swift              # menu, the four modes, watchdog, hot-plug
-├── DisplayMirrorHelper.swift      # find the glasses' display, best mode, mirroring
-├── Settings.swift                 # launch at login
-├── UltraXReal-Bridging-Header.h   # exposes the C drivers to Swift
-├── Spatial/
-│   ├── XRealIMUService.swift      # IMU stream (orientation, linear acceleration), USB presence
-│   ├── XRealMCUService.swift      # glasses display mode / brightness over HID
-│   ├── StereoSceneRenderer.swift  # side-by-side Metal renderer, Stonehenge scene
-│   ├── StereoShaders.metal        # sky, grass, stone, shadow shaders
-│   ├── CinemaPlayer.swift         # video on the glasses, audio to the glasses
-│   ├── CinemaControlView.swift    # transport panel in the menu
-│   └── TapDetector.swift
-└── Vendor/
-    ├── hidapi/
-    ├── fusion/                    # Madgwick AHRS
-    └── xreal-imu/                 # IMU protocol (from xrealair-sdk-macos) + device_mcu.c (new)
-```
-
----
+Sign to run locally, build, run. Not notarized: `xattr -cr` the app or allow it in *Privacy & Security*.
+Dev arguments: `--stereo`, `--cinema <file>`.
 
 ## Known limitations
 
-- Head-axis signs were tuned by feel on one pair of glasses (`yawSign`, `pitchSign`, `rollSign` in `StereoSceneRenderer.swift`). Flip one if an axis feels inverted.
-- Switching the glasses to 3D and back takes 8–26 s (they re-enumerate as a new display).
-- 3DoF only: rotation, no positional tracking.
-- Tap threshold (0.6 g) was tuned on Air 2 Pro; peaks are logged to help re-tuning.
-- Private `CGVirtualDisplay` API from the original project is no longer used, so the app has no private-API dependency any more, but it is still not notarized: run `xattr -cr` on the app or allow it in *Privacy & Security*.
+- Head-axis signs (`yawSign`, `pitchSign`, `rollSign` in `StereoSceneRenderer.swift`) were tuned by feel on one pair.
+- Switching the glasses to 3D and back takes 8–25 s (they re-enumerate as a new display). 3DoF only.
+- Tap threshold (0.6 g) tuned on Air 2 Pro.
 
-## What changed from upstream
+See [CHANGELOG.md](CHANGELOG.md) for what changed from upstream.
 
-See [CHANGELOG.md](CHANGELOG.md).
+## Credits & license
 
-## Credits
-
-- [DannyDesert/XReal-Ultrawide](https://github.com/DannyDesert/XReal-Ultrawide) — the original UltraXReal this fork is based on (MIT).
-- [adidoes/xrealair-sdk-macos](https://github.com/adidoes/xrealair-sdk-macos) — IMU driver.
-- [xioTechnologies/Fusion](https://github.com/xioTechnologies/Fusion) — sensor fusion.
-- [TheJackiMonster/nrealAirLinuxDriver](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver) — MCU packet format and display-mode command.
-- [libusb/hidapi](https://github.com/libusb/hidapi).
-
-## License
-
-MIT, same as the original project. See [LICENSE](LICENSE).
+[DannyDesert/XReal-Ultrawide](https://github.com/DannyDesert/XReal-Ultrawide) (base),
+[adidoes/xrealair-sdk-macos](https://github.com/adidoes/xrealair-sdk-macos),
+[xioTechnologies/Fusion](https://github.com/xioTechnologies/Fusion),
+[TheJackiMonster/nrealAirLinuxDriver](https://gitlab.com/TheJackiMonster/nrealAirLinuxDriver) (MCU protocol),
+[libusb/hidapi](https://github.com/libusb/hidapi). MIT, see [LICENSE](LICENSE).
 
 ---
 
-## Кратко по-русски
-
-Форк UltraXReal от DannyDesert. Программа в строке меню для очков XReal Air с четырьмя режимами:
-дополнительный дисплей, зеркало основного дисплея, кинотеатр (видео и звук только в очки,
-двойной стук по очкам ставит на паузу) и стерео-демо: зритель стоит внутри Стоунхенджа. Очки сами переводятся в максимальное
-разрешение, при отключении очков всё гасится. Проверено на XReal Air 2 Pro и macOS 26.
+**По-русски:** форк UltraXReal для очков XReal Air, четыре режима: дополнительный дисплей, зеркало, кинотеатр
+(видео и звук только в очки, двойной стук ставит на паузу) и стерео-демо внутри Стоунхенджа.
+Проверено на Air 2 Pro и macOS 26.
