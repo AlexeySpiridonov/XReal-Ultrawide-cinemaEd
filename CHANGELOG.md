@@ -5,9 +5,9 @@
 Fork of [DannyDesert/XReal-Ultrawide](https://github.com/DannyDesert/XReal-Ultrawide) v2.0.0.
 
 ### Added
-- Four explicit, mutually exclusive modes in the menu: extra display, mirror of the built-in display, stereo 3D chairs demo, cinema.
+- Four explicit, mutually exclusive modes in the menu: extended display, mirror of the built-in display, cinema, stereo 3D demo.
 - Control of the glasses' display mode over USB HID (`device_mcu.c`, `XRealMCUService`): switch to side-by-side 3D and back, read/set brightness. Verified on Air 2 Pro (`0x03` = SBS, `0x0B` = factory 2D 120 Hz).
-- Side-by-side stereo renderer (Metal, one pass per eye) with head tracking from the IMU; demo scene of twelve chairs around the viewer.
+- Side-by-side stereo renderer (Metal, one pass per eye) with head tracking from the IMU; demo scene: the viewer stands inside Stonehenge (procedural sky with clouds and distant hills, grass, rough stones with lichen, planar sun shadows, no textures).
 - Cinema: file picker, fullscreen playback on the glasses only, audio routed to the glasses' USB speakers, transport panel in the menu (play/pause, stop, seek with time, volume).
 - Double tap on the glasses pauses/resumes the cinema (accelerometer-based `TapDetector`).
 - Automatic best native display mode for the glasses (1920×1080@120) at launch, on hot-plug and after leaving 3D; menu item shows the current mode.

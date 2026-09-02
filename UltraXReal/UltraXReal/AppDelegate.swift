@@ -6,14 +6,14 @@ import UniformTypeIdentifiers
 enum GlassesMode: Int {
     case extraDisplay = 1   // glasses are a regular extended display, 1:1
     case mirror = 2         // glasses mirror the built-in display
-    case chairs = 3         // stereo 3D demo: chairs around the viewer
-    case cinema = 4         // a video fullscreen on the glasses, sound in the glasses
+    case cinema = 3         // a video fullscreen on the glasses, sound in the glasses
+    case demo = 4         // stereo 3D demo: standing inside Stonehenge
 
     var title: String {
         switch self {
         case .extraDisplay: return "Extended Display"
         case .mirror: return "Mirror Main Display"
-        case .chairs: return "3D Chairs"
+        case .chairs: return "Demo: 3D"
         case .cinema: return "Cinema…"
         }
     }
@@ -86,7 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let imuAvailable = XRealIMUService.isDeviceAvailable()
 
-        for candidate in [GlassesMode.extraDisplay, .mirror, .chairs, .cinema] {
+        for candidate in [GlassesMode.extraDisplay, .mirror, .cinema, .chairs] {
             var title = candidate.title
             if candidate == .cinema, mode == .cinema, let cinemaURL {
                 title = "Cinema: \(cinemaURL.lastPathComponent)"
@@ -553,7 +553,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .applicationName: "UltraXReal",
             .applicationVersion: "3.0.0",
             .credits: NSAttributedString(
-                string: "Open-source app for XReal Air glasses.\nModes: extended display, mirror, 3D chairs, cinema.\nhttps://github.com/AlexeySpiridonov/XReal-Ultrawide-cinemaEd",
+                string: "Open-source app for XReal Air glasses.\nModes: extended display, mirror, 3D demo, cinema.\nhttps://github.com/AlexeySpiridonov/XReal-Ultrawide-cinemaEd",
                 attributes: [.font: NSFont.systemFont(ofSize: 11)]
             )
         ])
