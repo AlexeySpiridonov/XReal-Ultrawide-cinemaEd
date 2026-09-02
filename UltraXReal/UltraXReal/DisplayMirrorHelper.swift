@@ -52,6 +52,59 @@ enum DisplayMirrorHelper {
         return nil
     }
 
+    /// Picks the best mode for a display: native 1:1 modes only (points == pixels, no HiDPI
+    /// or downscaling), then the largest area, then the highest refresh rate.
+    /// For XReal Air that is 1920x1080 at the panel's maximum refresh rate.
+    static func bestMode(for displayID: CGDirectDisplayID) -> CGDisplayMode? {
+        let options = [kCGDisplayShowDuplicateLowResolutionModes: true] as CFDictionary
+        guard let modes = CGDisplayCopyAllDisplayModes(displayID, options) as? [CGDisplayMode] else {
+            return nil
+        }
+        let native = modes.filter { $0.isUsableForDesktopGUI() && $0.width == $0.pixelWidth && $0.height == $0.pixelHeight }
+        let candidates = native.isEmpty ? modes : native
+        return candidates.max { a, b in
+            let areaA = a.width * a.height
+            let areaB = b.width * b.height
+            if areaA != areaB { return areaA < areaB }
+            return a.refreshRate < b.refreshRate
+        }
+    }
+
+    /// Switches the display to its best mode (see `bestMode(for:)`), persisting across reconnects.
+    /// Returns true if the mode was already set or has been changed successfully.
+    @discardableResult
+    static func applyBestMode(to displayID: CGDirectDisplayID) -> Bool {
+        guard let best = bestMode(for: displayID) else { return false }
+
+        if let current = CGDisplayCopyDisplayMode(displayID),
+           current.pixelWidth == best.pixelWidth,
+           current.pixelHeight == best.pixelHeight,
+           current.refreshRate == best.refreshRate {
+            return true
+        }
+
+        var config: CGDisplayConfigRef?
+        guard CGBeginDisplayConfiguration(&config) == .success, let config else { return false }
+
+        guard CGConfigureDisplayWithDisplayMode(config, displayID, best, nil) == .success else {
+            CGCancelDisplayConfiguration(config)
+            return false
+        }
+
+        let ok = CGCompleteDisplayConfiguration(config, .permanently) == .success
+        if ok {
+            print("[Display] XReal Air \(displayID) switched to \(best.pixelWidth)x\(best.pixelHeight)@\(Int(best.refreshRate))")
+        }
+        return ok
+    }
+
+    /// Finds the XReal Air display and switches it to its best mode.
+    @discardableResult
+    static func applyBestModeToXReal(excludingDisplayID: CGDirectDisplayID? = nil) -> Bool {
+        guard let xrealID = findXRealDisplay(excludingDisplayID: excludingDisplayID) else { return false }
+        return applyBestMode(to: xrealID)
+    }
+
     /// Mirror the virtual display onto the target physical display.
     @discardableResult
     static func mirror(virtualDisplayID: CGDirectDisplayID, onto targetDisplayID: CGDirectDisplayID) -> Bool {

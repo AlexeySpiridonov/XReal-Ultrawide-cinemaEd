@@ -1,5 +1,7 @@
 import Foundation
 import Combine
+import IOKit
+import QuartzCore
 import simd
 
 /// Wraps the xrealair-sdk-macos C driver to publish IMU orientation data.
@@ -12,6 +14,9 @@ final class XRealIMUService: ObservableObject {
     @Published private(set) var orientation: simd_quatf = simd_quatf(ix: 0, iy: 0, iz: 0, r: 1)
 
     let orientationSubject = PassthroughSubject<simd_quatf, Never>()
+
+    /// Linear acceleration (gravity removed) magnitude in g, with the host timestamp. Sent per IMU sample.
+    let accelerationSubject = PassthroughSubject<(time: TimeInterval, magnitude: Float), Never>()
 
     private var device: UnsafeMutablePointer<device_imu_type>?
     private var readQueue: DispatchQueue?
@@ -28,15 +33,24 @@ final class XRealIMUService: ObservableObject {
 
     // MARK: - Public
 
-    /// Check if any XReal glasses are connected (without opening the device).
+    /// Check if any XReal glasses are connected, via the IOKit registry.
+    /// Deliberately not hidapi: hid_enumerate is not thread-safe and crashes when the IMU
+    /// read thread is using hidapi at the same time.
     static func isDeviceAvailable() -> Bool {
-        if !device_init() { return false }
-        defer { device_exit() }
+        // The glasses expose several HID interfaces (IMU, MCU) under their USB vendor ID.
+        guard let matching = IOServiceMatching("IOHIDDevice") else { return false }
+        (matching as NSMutableDictionary)[kIOPropertyMatchKey] = ["VendorID": Int(xreal_vendor_id)]
 
-        let info = hid_enumerate(xreal_vendor_id, 0)
-        let found = info != nil
-        hid_free_enumeration(info)
-        return found
+        var iterator: io_iterator_t = 0
+        guard IOServiceGetMatchingServices(kIOMainPortDefault, matching, &iterator) == KERN_SUCCESS else {
+            return false
+        }
+        defer { IOObjectRelease(iterator) }
+
+        let first = IOIteratorNext(iterator)
+        guard first != 0 else { return false }
+        IOObjectRelease(first)
+        return true
     }
 
     /// Open the HID connection and start reading IMU data on a background thread.
@@ -131,6 +145,10 @@ final class XRealIMUService: ObservableObject {
                     self?.orientation = quat
                 }
                 orientationSubject.send(quat)
+
+                let a = device_imu_get_linear_acceleration(ahrs)
+                let magnitude = (a.x * a.x + a.y * a.y + a.z * a.z).squareRoot()
+                accelerationSubject.send((time: CACurrentMediaTime(), magnitude: magnitude))
             }
         }
     }

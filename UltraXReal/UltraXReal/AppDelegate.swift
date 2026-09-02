@@ -1,390 +1,534 @@
 import AppKit
-import SwiftUI
+import Combine
+import UniformTypeIdentifiers
+
+/// What the glasses are doing right now. Exactly one mode is active at a time.
+enum GlassesMode: Int {
+    case extraDisplay = 1   // glasses are a regular extended display, 1:1
+    case mirror = 2         // glasses mirror the built-in display
+    case chairs = 3         // stereo 3D demo: chairs around the viewer
+    case cinema = 4         // a video fullscreen on the glasses, sound in the glasses
+
+    var title: String {
+        switch self {
+        case .extraDisplay: return "Дополнительный дисплей"
+        case .mirror: return "Зеркало основного дисплея"
+        case .chairs: return "3D-стулья"
+        case .cinema: return "Кинотеатр…"
+        }
+    }
+
+    var usesStereo: Bool { self == .chairs }
+}
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem!
-    private let displayManager = VirtualDisplayManager()
     private let settings = Settings.shared
-
-    // Spatial mode components
-    private var imuService: XRealIMUService?
-    private var spatialTracker: SpatialTracker?
-    private var spatialRenderer: SpatialRenderer?
-    private var isSpatialActive = false
     private var globalHotkeyMonitor: Any?
+
+    private var mode: GlassesMode = .extraDisplay
+
+    // Mirror mode
+    private var mirroredGlassesID: CGDirectDisplayID?
+
+    // Stereo mode (chairs)
+    private var imuService: XRealIMUService?
+    private var stereoRenderer: StereoSceneRenderer?
+    private var stereoStatus: String?
+    private var stereoPreviousMode: UInt8?
+    private var stereoEnableGeneration = 0
+
+    // Cinema
+    private var cinemaURL: URL?
+    private var cinemaPlayer: CinemaPlayer?
+    private var tapDetector: TapDetector?
+    private var tapSubscription: AnyCancellable?
+
+    // Glasses presence watchdog
+    private var glassesWatchdog: Timer?
+    private var missedGlassesChecks = 0
+    private var glassesDisconnectedNotice = false
+
+    private var isStereoActive: Bool { stereoRenderer != nil }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-
-        if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "display", accessibilityDescription: "UltraXReal")
-            button.image?.isTemplate = true
-        }
+        updateIcon()
 
         setupRecenterHotkey()
+        setupDisplayReconfigurationCallback()
+        startGlassesWatchdog()
+        DisplayMirrorHelper.applyBestModeToXReal()
         buildMenu()
 
-        // Restore previous state
-        if settings.displayWasEnabled {
-            if settings.spatialMode {
-                enableSpatialMode()
-            } else {
-                toggleStaticDisplay()
-            }
+        // Launch arguments for development: `--stereo` starts the chairs, `--cinema <file>` the cinema.
+        let args = CommandLine.arguments
+        if args.contains("--stereo") {
+            switchTo(.chairs)
+        } else if let index = args.firstIndex(of: "--cinema"), index + 1 < args.count {
+            cinemaURL = URL(fileURLWithPath: args[index + 1])
+            switchTo(.cinema, askForFile: false)
         }
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        if isSpatialActive {
-            disableSpatialMode()
-        }
+        glassesWatchdog?.invalidate()
+        leaveCurrentMode(exiting: true)
         if let monitor = globalHotkeyMonitor {
             NSEvent.removeMonitor(monitor)
         }
+        CGDisplayRemoveReconfigurationCallback(displayReconfigurationCallback, nil)
     }
+
+    // MARK: - Menu
 
     private func buildMenu() {
         let menu = NSMenu()
-
-        // --- Mode Section ---
         let imuAvailable = XRealIMUService.isDeviceAvailable()
 
-        // Static mode toggle
-        let staticTitle = (displayManager.isActive && !isSpatialActive) ? "Disable Ultrawide" : "Enable Ultrawide (Static)"
-        let staticItem = NSMenuItem(title: staticTitle, action: #selector(toggleStaticDisplay), keyEquivalent: "e")
-        staticItem.target = self
-        if displayManager.isActive && !isSpatialActive {
-            staticItem.state = .on
-        }
-        menu.addItem(staticItem)
-
-        // Spatial mode toggle
-        let spatialTitle = isSpatialActive ? "Disable Spatial" : "Enable Spatial (Floating)"
-        let spatialItem = NSMenuItem(title: spatialTitle, action: #selector(toggleSpatialDisplay), keyEquivalent: "s")
-        spatialItem.target = self
-        if isSpatialActive {
-            spatialItem.state = .on
-        }
-        if !imuAvailable && !isSpatialActive {
-            spatialItem.isEnabled = false
-            spatialItem.toolTip = "Connect XReal Air via USB-C to enable spatial mode (IMU not detected)"
-        }
-        menu.addItem(spatialItem)
-
-        menu.addItem(NSMenuItem.separator())
-
-        // --- Resolution submenu (for static mode) ---
-        let resMenu = NSMenu()
-        for resolution in DisplayResolution.allCases {
-            let item = NSMenuItem(title: resolution.label, action: #selector(changeResolution(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = resolution
-            if settings.selectedResolution == resolution {
-                item.state = .on
+        for candidate in [GlassesMode.extraDisplay, .mirror, .chairs, .cinema] {
+            var title = candidate.title
+            if candidate == .cinema, mode == .cinema, let cinemaURL {
+                title = "Кинотеатр: \(cinemaURL.lastPathComponent)"
             }
-            resMenu.addItem(item)
+            let item = NSMenuItem(title: title, action: #selector(selectMode(_:)), keyEquivalent: "\(candidate.rawValue)")
+            item.target = self
+            item.tag = candidate.rawValue
+            item.state = candidate == mode ? .on : .off
+            if candidate.usesStereo && !imuAvailable && candidate != mode {
+                item.isEnabled = false
+                item.toolTip = "Подключите XReal Air по USB-C (IMU не обнаружен)"
+            }
+            menu.addItem(item)
         }
-        let resItem = NSMenuItem(title: "Resolution", action: nil, keyEquivalent: "")
-        resItem.submenu = resMenu
-        resItem.isEnabled = !isSpatialActive  // Disabled during spatial mode
-        menu.addItem(resItem)
-
-        // Mirror (static mode only)
-        let mirrorItem = NSMenuItem(title: "Mirror to XReal Air", action: #selector(mirrorToXReal), keyEquivalent: "")
-        mirrorItem.target = self
-        mirrorItem.isEnabled = displayManager.isActive && !isSpatialActive
-        menu.addItem(mirrorItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // --- Spatial Settings submenu ---
-        let spatialMenu = NSMenu()
+        // Cinema transport panel
+        if let cinemaPlayer {
+            let panelItem = NSMenuItem()
+            panelItem.view = CinemaControlView(
+                player: cinemaPlayer,
+                onStop: { [weak self] in
+                    self?.statusItem.menu?.cancelTracking()
+                    self?.switchTo(.extraDisplay)
+                },
+                onChanged: { [weak self] in self?.updateIcon() }
+            )
+            menu.addItem(panelItem)
+            menu.addItem(NSMenuItem.separator())
+        }
 
-        // Recenter
-        let recenterItem = NSMenuItem(title: "Recenter (Cmd+Shift+R)", action: #selector(recenterSpatial), keyEquivalent: "")
+        // Recenter (stereo mode)
+        let recenterItem = NSMenuItem(title: "Отцентровать (Cmd+Shift+R)", action: #selector(recenter), keyEquivalent: "")
         recenterItem.target = self
-        recenterItem.isEnabled = isSpatialActive
-        spatialMenu.addItem(recenterItem)
+        recenterItem.isEnabled = isStereoActive
+        menu.addItem(recenterItem)
 
-        spatialMenu.addItem(NSMenuItem.separator())
-
-        // Sensitivity
-        let sensMenu = NSMenu()
-        for sens in SpatialSensitivity.allCases {
-            let item = NSMenuItem(title: sens.rawValue.capitalized, action: #selector(changeSensitivity(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = sens.rawValue
-            if settings.spatialSensitivity == sens { item.state = .on }
-            sensMenu.addItem(item)
+        // Glasses resolution
+        let glassesID = DisplayMirrorHelper.findXRealDisplay()
+        let glassesTitle: String
+        if let glassesID, let displayMode = CGDisplayCopyDisplayMode(glassesID) {
+            glassesTitle = "Очки: \(displayMode.pixelWidth)x\(displayMode.pixelHeight)@\(Int(displayMode.refreshRate)) — выставить максимум"
+        } else {
+            glassesTitle = "Очки: дисплей не найден"
         }
-        let sensItem = NSMenuItem(title: "Sensitivity", action: nil, keyEquivalent: "")
-        sensItem.submenu = sensMenu
-        spatialMenu.addItem(sensItem)
-
-        // Smoothing
-        let smoothMenu = NSMenu()
-        for smooth in SpatialSmoothing.allCases {
-            let item = NSMenuItem(title: smooth.rawValue.capitalized, action: #selector(changeSmoothing(_:)), keyEquivalent: "")
-            item.target = self
-            item.representedObject = smooth.rawValue
-            if settings.spatialSmoothing == smooth { item.state = .on }
-            smoothMenu.addItem(item)
-        }
-        let smoothItem = NSMenuItem(title: "Smoothing", action: nil, keyEquivalent: "")
-        smoothItem.submenu = smoothMenu
-        spatialMenu.addItem(smoothItem)
-
-        // Lean-to-Zoom toggle
-        let zoomItem = NSMenuItem(title: "Lean-to-Zoom", action: #selector(toggleLeanToZoom(_:)), keyEquivalent: "")
-        zoomItem.target = self
-        zoomItem.state = settings.leanToZoomEnabled ? .on : .off
-        spatialMenu.addItem(zoomItem)
-
-        let spatialSettingsItem = NSMenuItem(title: "Spatial Settings", action: nil, keyEquivalent: "")
-        spatialSettingsItem.submenu = spatialMenu
-        menu.addItem(spatialSettingsItem)
+        let glassesItem = NSMenuItem(title: glassesTitle, action: #selector(applyBestGlassesMode), keyEquivalent: "")
+        glassesItem.target = self
+        glassesItem.isEnabled = glassesID != nil
+        menu.addItem(glassesItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // --- General Settings ---
-        let loginItem = NSMenuItem(title: "Launch at Login", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
+        // Status
+        var statusLines: [String] = []
+        if let renderer = stereoRenderer {
+            let stereo = renderer.eyeCount == 2 ? "SBS" : "моно, очки не переключились в 3D"
+            statusLines.append("Стерео: активно (\(renderer.fps) к/с, \(stereo))")
+            statusLines.append("IMU: \(imuService?.isConnected == true ? "подключён" : "отключён")")
+        } else if let stereoStatus {
+            statusLines.append("Стерео: \(stereoStatus)")
+        } else if mode == .cinema {
+            if let cinemaPlayer {
+                statusLines.append("Звук: \(cinemaPlayer.audioDeviceName ?? "системный выход по умолчанию")")
+                statusLines.append("Двойной стук по очкам: пауза / продолжить")
+            } else {
+                statusLines.append("Кинотеатр: дисплей очков не найден")
+            }
+        } else if mode == .mirror {
+            statusLines.append(mirroredGlassesID != nil ? "Зеркало: основной дисплей → очки" : "Зеркало: очки не найдены")
+        } else if glassesDisconnectedNotice {
+            statusLines.append("Очки отключены, режимы выключены")
+        } else if glassesID == nil {
+            statusLines.append("Подсказка: подключите XReal Air по USB-C (\(imuAvailable ? "IMU обнаружен" : "IMU не обнаружен"))")
+        }
+        if !statusLines.isEmpty {
+            for line in statusLines {
+                let item = NSMenuItem(title: line, action: nil, keyEquivalent: "")
+                item.isEnabled = false
+                menu.addItem(item)
+            }
+            menu.addItem(NSMenuItem.separator())
+        }
+
+        let loginItem = NSMenuItem(title: "Запускать при входе", action: #selector(toggleLaunchAtLogin(_:)), keyEquivalent: "")
         loginItem.target = self
         loginItem.state = settings.launchAtLogin ? .on : .off
         menu.addItem(loginItem)
 
         menu.addItem(NSMenuItem.separator())
 
-        // --- Status info ---
-        if isSpatialActive, let renderer = spatialRenderer {
-            let fpsItem = NSMenuItem(title: "Spatial: Active (\(renderer.fps) fps)", action: nil, keyEquivalent: "")
-            fpsItem.isEnabled = false
-            menu.addItem(fpsItem)
-
-            if let id = displayManager.currentDisplayID {
-                let canvasItem = NSMenuItem(title: "Canvas: 3840x2160 (ID: \(id))", action: nil, keyEquivalent: "")
-                canvasItem.isEnabled = false
-                menu.addItem(canvasItem)
-            }
-
-            let imuItem = NSMenuItem(title: "IMU: \(imuService?.isConnected == true ? "Connected" : "Disconnected")", action: nil, keyEquivalent: "")
-            imuItem.isEnabled = false
-            menu.addItem(imuItem)
-
-            menu.addItem(NSMenuItem.separator())
-        } else if displayManager.isActive, let id = displayManager.currentDisplayID {
-            let infoItem = NSMenuItem(title: "Display ID: \(id) — \(settings.selectedResolution.label)", action: nil, keyEquivalent: "")
-            infoItem.isEnabled = false
-            menu.addItem(infoItem)
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        if let error = displayManager.lastError {
-            let errorItem = NSMenuItem(title: error, action: nil, keyEquivalent: "")
-            errorItem.isEnabled = false
-            menu.addItem(errorItem)
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        if !displayManager.isActive {
-            let imuStatus = imuAvailable ? "IMU detected" : "IMU not detected"
-            let tipItem = NSMenuItem(title: "Tip: Connect XReal Air via USB-C (\(imuStatus))", action: nil, keyEquivalent: "")
-            tipItem.isEnabled = false
-            menu.addItem(tipItem)
-            menu.addItem(NSMenuItem.separator())
-        }
-
-        // About
-        let aboutItem = NSMenuItem(title: "About UltraXReal", action: #selector(showAbout), keyEquivalent: "")
+        let aboutItem = NSMenuItem(title: "О программе UltraXReal", action: #selector(showAbout), keyEquivalent: "")
         aboutItem.target = self
         menu.addItem(aboutItem)
 
-        // Quit
-        let quitItem = NSMenuItem(title: "Quit", action: #selector(quit), keyEquivalent: "q")
+        let quitItem = NSMenuItem(title: "Выйти", action: #selector(quit), keyEquivalent: "q")
         quitItem.target = self
         menu.addItem(quitItem)
 
         statusItem.menu = menu
     }
 
-    // MARK: - Static Mode Actions
+    // MARK: - Mode switching
 
-    @objc private func toggleStaticDisplay() {
-        // If spatial is active, disable it first
-        if isSpatialActive {
-            disableSpatialMode()
+    @objc private func selectMode(_ sender: NSMenuItem) {
+        guard let selected = GlassesMode(rawValue: sender.tag) else { return }
+        switchTo(selected)
+    }
+
+    private func switchTo(_ newMode: GlassesMode, askForFile: Bool = true) {
+        // Re-selecting the cinema lets the user pick another file; other modes are idempotent.
+        if newMode == mode && newMode != .cinema { return }
+
+        if newMode == .cinema && askForFile {
+            guard let url = chooseVideoFile() else { return }
+            cinemaURL = url
         }
 
-        if displayManager.isActive {
-            if let xrealID = DisplayMirrorHelper.findXRealDisplay(excludingDisplayID: displayManager.currentDisplayID) {
-                DisplayMirrorHelper.unmirror(displayID: xrealID)
-            }
-            displayManager.disable()
-            settings.displayWasEnabled = false
-            settings.spatialMode = false
+        leaveCurrentMode()
+        mode = newMode
+        glassesDisconnectedNotice = false
+
+        switch newMode {
+        case .extraDisplay:
+            enableExtraDisplay()
+        case .mirror:
+            enableMirror()
+        case .chairs:
+            enableStereo()
+        case .cinema:
+            guard let cinemaURL else { mode = .extraDisplay; break }
+            enableCinema(url: cinemaURL)
+        }
+
+        updateIcon()
+        buildMenu()
+    }
+
+    /// Undoes whatever the current mode did to the glasses.
+    private func leaveCurrentMode(exiting: Bool = false) {
+        switch mode {
+        case .mirror:
+            disableMirror()
+        case .chairs:
+            disableStereo(waitForGlasses: exiting)
+        case .cinema:
+            disableCinema()
+        case .extraDisplay:
+            break
+        }
+        // A stereo enable may still be pending (glasses switched, display not back yet).
+        if stereoPreviousMode != nil {
+            disableStereo(waitForGlasses: exiting)
+        }
+    }
+
+    // MARK: - Mode 1: extra display
+
+    private func enableExtraDisplay() {
+        if let glassesID = DisplayMirrorHelper.findXRealDisplay() {
+            DisplayMirrorHelper.unmirror(displayID: glassesID)
+            DisplayMirrorHelper.applyBestMode(to: glassesID)
+        }
+    }
+
+    // MARK: - Mode 2: mirror
+
+    private func enableMirror() {
+        guard let glassesID = DisplayMirrorHelper.findXRealDisplay() else {
+            mirroredGlassesID = nil
+            return
+        }
+        let mainID = CGMainDisplayID()
+        if DisplayMirrorHelper.mirror(virtualDisplayID: mainID, onto: glassesID) {
+            mirroredGlassesID = glassesID
         } else {
-            displayManager.enable(resolution: settings.selectedResolution)
-            settings.displayWasEnabled = true
-            settings.spatialMode = false
-
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) { [weak self] in
-                self?.autoMirrorToXReal()
-            }
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            self?.updateIcon()
-            self?.buildMenu()
+            print("[Mirror] Failed to mirror display \(mainID) onto glasses \(glassesID)")
+            mirroredGlassesID = nil
         }
     }
 
-    private func autoMirrorToXReal() {
-        guard let virtualID = displayManager.currentDisplayID else { return }
-        if let xrealID = DisplayMirrorHelper.findXRealDisplay(excludingDisplayID: virtualID) {
-            let success = DisplayMirrorHelper.mirror(virtualDisplayID: virtualID, onto: xrealID)
-            if success {
-                print("Auto-mirrored virtual display \(virtualID) to XReal Air \(xrealID)")
-            } else {
-                print("Failed to auto-mirror to XReal Air")
-            }
-        } else {
-            print("XReal Air display not found — use Mirror to XReal Air manually")
+    private func disableMirror() {
+        if let glassesID = mirroredGlassesID {
+            DisplayMirrorHelper.unmirror(displayID: glassesID)
+            mirroredGlassesID = nil
         }
     }
 
-    // MARK: - Spatial Mode Actions
+    // MARK: - Mode 4: cinema
 
-    @objc private func toggleSpatialDisplay() {
-        if isSpatialActive {
-            disableSpatialMode()
-        } else {
-            // If static mode is active, disable it first
-            if displayManager.isActive {
-                if let xrealID = DisplayMirrorHelper.findXRealDisplay(excludingDisplayID: displayManager.currentDisplayID) {
-                    DisplayMirrorHelper.unmirror(displayID: xrealID)
-                }
-                displayManager.disable()
+    private func enableCinema(url: URL) {
+        if let glassesID = DisplayMirrorHelper.findXRealDisplay() {
+            DisplayMirrorHelper.unmirror(displayID: glassesID)
+            DisplayMirrorHelper.applyBestMode(to: glassesID)
+        }
+        let player = CinemaPlayer(url: url)
+        guard player.start() else {
+            cinemaPlayer = nil
+            return
+        }
+        cinemaPlayer = player
 
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
-                    self?.enableSpatialMode()
-                }
-            } else {
-                enableSpatialMode()
-            }
+        // Double tap on the glasses toggles pause. Needs the IMU stream for the accelerometer.
+        let imu = XRealIMUService()
+        imu.start()
+        imuService = imu
+
+        let detector = TapDetector()
+        detector.onDoubleTap = { [weak self] in
+            self?.cinemaPlayer?.togglePause()
+        }
+        tapDetector = detector
+        tapSubscription = imu.accelerationSubject.sink { sample in
+            detector.process(time: sample.time, magnitude: sample.magnitude)
         }
     }
 
-    private func enableSpatialMode() {
-        // 1. Create large canvas virtual display
-        displayManager.enableSpatialCanvas()
-
-        // 2. Wait for display, then set up the spatial pipeline
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) { [weak self] in
-            guard let self, let virtualID = self.displayManager.currentDisplayID else {
-                print("[Spatial] Failed — virtual display not created")
-                return
-            }
-
-            // Unmirror XReal Air — spatial mode renders directly
-            if let xrealID = DisplayMirrorHelper.findXRealDisplay(excludingDisplayID: virtualID) {
-                DisplayMirrorHelper.unmirror(displayID: xrealID)
-            }
-
-            // 3. Start IMU
-            let imu = XRealIMUService()
-            imu.start()
-            self.imuService = imu
-
-            // 4. Start spatial tracker
-            let tracker = SpatialTracker(imuService: imu)
-            tracker.sensitivity = self.settings.spatialSensitivity
-            tracker.smoothing = self.settings.spatialSmoothing
-            tracker.leanToZoomEnabled = self.settings.leanToZoomEnabled
-            self.spatialTracker = tracker
-
-            // 5. Start renderer
-            let renderer = SpatialRenderer(
-                virtualDisplayID: virtualID,
-                spatialTracker: tracker
-            )
-            renderer.start()
-            self.spatialRenderer = renderer
-
-            self.isSpatialActive = true
-            self.settings.displayWasEnabled = true
-            self.settings.spatialMode = true
-
-            self.updateIcon()
-            self.buildMenu()
-
-            // Auto-recenter after a short delay
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
-                tracker.recenter()
-            }
-        }
-    }
-
-    private func disableSpatialMode() {
-        spatialRenderer?.stop()
-        spatialRenderer = nil
-        spatialTracker = nil
+    private func disableCinema() {
+        tapSubscription?.cancel()
+        tapSubscription = nil
+        tapDetector = nil
         imuService?.stop()
         imuService = nil
+        cinemaPlayer?.stop()
+        cinemaPlayer = nil
+    }
 
-        displayManager.disable()
-        isSpatialActive = false
-        settings.displayWasEnabled = false
-        settings.spatialMode = false
+    private func chooseVideoFile() -> URL? {
+        let panel = NSOpenPanel()
+        panel.title = "Выберите видео для кинотеатра"
+        panel.prompt = "Смотреть"
+        panel.allowedContentTypes = [.movie, .video, .mpeg4Movie, .quickTimeMovie]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        NSApp.activate(ignoringOtherApps: true)
+        return panel.runModal() == .OK ? panel.url : nil
+    }
 
+    // MARK: - Mode 3: stereo chairs
+
+    private func enableStereo() {
+        // Already side-by-side if the glasses currently present a 3840-wide panel.
+        let alreadySBS: Bool
+        if let glassesID = DisplayMirrorHelper.findXRealDisplay() {
+            alreadySBS = CGDisplayPixelsWide(glassesID) >= 3000
+        } else {
+            alreadySBS = false
+        }
+
+        stereoStatus = "переключаю очки в 3D…"
+        buildMenu()
+        stereoEnableGeneration += 1
+        let generation = stereoEnableGeneration
+
+        // MCU calls block while waiting for the glasses, keep them off the main thread.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let previous = XRealMCUService.readDisplayMode()
+            print("[Stereo] Glasses display mode before: \(previous.map { "0x" + String($0, radix: 16) } ?? "unknown")")
+
+            let switched = alreadySBS || XRealMCUService.setDisplayMode(XRealMCUService.sideBySideMode)
+
+            DispatchQueue.main.async {
+                guard let self, generation == self.stereoEnableGeneration else { return }
+                self.stereoPreviousMode = alreadySBS ? nil : previous
+                if !switched {
+                    print("[Stereo] Glasses did not switch to SBS, continuing in mono")
+                }
+                self.stereoStatus = switched ? "жду переподключения дисплея (до минуты)…" : "очки не переключились в 3D, запускаю моно"
+                self.buildMenu()
+                // The glasses take 8–25 s to come back as a 3840x1080 display.
+                self.waitForGlassesDisplay(minWidth: switched ? 3000 : 0, attempts: 60) { [weak self] in
+                    guard let self, generation == self.stereoEnableGeneration else { return }
+                    self.startStereoPipeline()
+                }
+            }
+        }
+    }
+
+    /// Polls until the glasses' display is back (they re-enumerate after a mode switch)
+    /// and wide enough, applying the best mode along the way. Always calls completion.
+    private func waitForGlassesDisplay(minWidth: Int, attempts: Int, completion: @escaping () -> Void) {
+        if let glassesID = DisplayMirrorHelper.findXRealDisplay() {
+            DisplayMirrorHelper.applyBestMode(to: glassesID)
+            if CGDisplayPixelsWide(glassesID) >= minWidth {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: completion)
+                return
+            }
+        }
+        guard attempts > 0 else {
+            print("[Stereo] Timed out waiting for the glasses' display")
+            completion()
+            return
+        }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            self?.waitForGlassesDisplay(minWidth: minWidth, attempts: attempts - 1, completion: completion)
+        }
+    }
+
+    private func startStereoPipeline() {
+        let imu = XRealIMUService()
+        imu.start()
+        imuService = imu
+
+        let renderer = StereoSceneRenderer(imuService: imu)
+        guard renderer.start() else {
+            stereoStatus = "не найден дисплей очков"
+            imu.stop()
+            imuService = nil
+            restoreGlassesDisplayMode()
+            buildMenu()
+            return
+        }
+
+        stereoRenderer = renderer
+        stereoStatus = nil
+        updateIcon()
+        buildMenu()
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) {
+            imu.recenter()
+        }
+    }
+
+    /// - Parameter waitForGlasses: restore the glasses' 2D mode on the current thread
+    ///   (needed when the process is about to exit).
+    private func disableStereo(waitForGlasses: Bool = false) {
+        stereoEnableGeneration += 1  // cancels a pending enable
+        stereoRenderer?.stop()
+        stereoRenderer = nil
+        imuService?.stop()
+        imuService = nil
+        stereoStatus = nil
+
+        restoreGlassesDisplayMode(synchronously: waitForGlasses)
+    }
+
+    /// Returns the glasses to the 2D mode they were in before the stereo mode.
+    /// Does nothing if the glasses were already side-by-side when it started.
+    private func restoreGlassesDisplayMode(synchronously: Bool = false) {
+        guard let previous = stereoPreviousMode else { return }
+        stereoPreviousMode = nil
+        let target = previous == XRealMCUService.sideBySideMode ? XRealMCUService.default2DMode : previous
+        if synchronously {
+            XRealMCUService.setDisplayMode(target)
+        } else {
+            DispatchQueue.global(qos: .userInitiated).async {
+                XRealMCUService.setDisplayMode(target)
+            }
+        }
+    }
+
+    @objc private func recenter() {
+        stereoRenderer?.recenter()
+    }
+
+    // MARK: - Glasses display
+
+    @objc private func applyBestGlassesMode() {
+        DisplayMirrorHelper.applyBestModeToXReal()
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.updateIcon()
             self?.buildMenu()
         }
     }
 
-    @objc private func recenterSpatial() {
-        spatialTracker?.recenter()
+    /// Switches the glasses to their best mode whenever they get (re)connected.
+    private func setupDisplayReconfigurationCallback() {
+        CGDisplayRegisterReconfigurationCallback(displayReconfigurationCallback, nil)
     }
 
-    // MARK: - Spatial Settings Actions
+    fileprivate func handleDisplayAdded(_ displayID: CGDirectDisplayID) {
+        guard displayID == DisplayMirrorHelper.findXRealDisplay() else { return }
+        // Give macOS a moment to finish bringing the display up
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self else { return }
+            DisplayMirrorHelper.applyBestMode(to: displayID)
 
-    @objc private func changeSensitivity(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let sens = SpatialSensitivity(rawValue: raw) else { return }
-        settings.spatialSensitivity = sens
-        spatialTracker?.sensitivity = sens
-        buildMenu()
-    }
-
-    @objc private func changeSmoothing(_ sender: NSMenuItem) {
-        guard let raw = sender.representedObject as? String,
-              let smooth = SpatialSmoothing(rawValue: raw) else { return }
-        settings.spatialSmoothing = smooth
-        spatialTracker?.smoothing = smooth
-        buildMenu()
-    }
-
-    @objc private func toggleLeanToZoom(_ sender: NSMenuItem) {
-        settings.leanToZoomEnabled.toggle()
-        spatialTracker?.leanToZoomEnabled = settings.leanToZoomEnabled
-        buildMenu()
-    }
-
-    // MARK: - Shared Actions
-
-    @objc private func changeResolution(_ sender: NSMenuItem) {
-        guard let resolution = sender.representedObject as? DisplayResolution else { return }
-        settings.selectedResolution = resolution
-        if displayManager.isActive && !isSpatialActive {
-            displayManager.changeResolution(resolution)
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { [weak self] in
-            self?.buildMenu()
+            // Glasses that were unplugged mid-stereo come back side-by-side; put them back to 2D.
+            if !self.mode.usesStereo, self.stereoPreviousMode == nil, CGDisplayPixelsWide(displayID) >= 3000 {
+                print("[Glasses] Reconnected in side-by-side mode, restoring 2D")
+                DispatchQueue.global(qos: .userInitiated).async {
+                    XRealMCUService.setDisplayMode(XRealMCUService.default2DMode)
+                }
+            }
+            self.buildMenu()
         }
     }
 
-    @objc private func mirrorToXReal() {
-        autoMirrorToXReal()
+    fileprivate func handleDisplayRemoved(_ displayID: CGDirectDisplayID) {
+        // Output windows hide themselves at once (see CinemaPlayer / StereoSceneRenderer).
+        // The display also disappears during a 2D/SBS switch, so decide by USB presence:
+        // no USB device one second later and no stereo switch in progress means unplugged.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
+            guard let self else { return }
+            let stereoSwitchInProgress = self.stereoPreviousMode != nil && self.stereoRenderer == nil
+            if !stereoSwitchInProgress, !XRealIMUService.isDeviceAvailable() {
+                self.handleGlassesDisconnected()
+            } else {
+                self.checkGlassesPresence()
+            }
+        }
     }
+
+    // MARK: - Glasses watchdog
+
+    /// Polls USB presence of the glasses; three misses in a row count as unplugged.
+    private func startGlassesWatchdog() {
+        glassesWatchdog = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+            self?.checkGlassesPresence()
+        }
+    }
+
+    private func checkGlassesPresence() {
+        let somethingActive = mode != .extraDisplay || stereoPreviousMode != nil || cinemaPlayer != nil
+        guard somethingActive else {
+            missedGlassesChecks = 0
+            return
+        }
+        if XRealIMUService.isDeviceAvailable() {
+            missedGlassesChecks = 0
+            return
+        }
+        missedGlassesChecks += 1
+        if missedGlassesChecks >= 3 {
+            missedGlassesChecks = 0
+            handleGlassesDisconnected()
+        }
+    }
+
+    /// Shuts down everything that touches the glasses without trying to talk to them.
+    private func handleGlassesDisconnected() {
+        guard mode != .extraDisplay || stereoPreviousMode != nil || cinemaPlayer != nil else { return }
+        print("[Glasses] Unplugged, shutting down \(mode.title)")
+        stereoEnableGeneration += 1     // cancel a pending stereo enable
+        stereoPreviousMode = nil        // nothing to restore, the glasses are gone
+        leaveCurrentMode()
+        mode = .extraDisplay
+        glassesDisconnectedNotice = true
+        updateIcon()
+        buildMenu()
+    }
+
+    // MARK: - Misc actions
 
     @objc private func toggleLaunchAtLogin(_ sender: NSMenuItem) {
         settings.launchAtLogin.toggle()
@@ -394,9 +538,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func showAbout() {
         NSApp.orderFrontStandardAboutPanel(options: [
             .applicationName: "UltraXReal",
-            .applicationVersion: "2.0.0",
+            .applicationVersion: "3.0.0",
             .credits: NSAttributedString(
-                string: "Open-source spatial display for XReal Air glasses.\nStatic ultrawide + head-tracked floating display.\nhttps://github.com/DannyDesert/XReal-Ultrawide",
+                string: "Открытая программа для очков XReal Air.\nРежимы: дополнительный дисплей, зеркало, 3D-стулья, кинотеатр.\nhttps://github.com/DannyDesert/XReal-Ultrawide",
                 attributes: [.font: NSFont.systemFont(ofSize: 11)]
             )
         ])
@@ -404,23 +548,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quit() {
-        if isSpatialActive {
-            disableSpatialMode()
-        } else {
-            displayManager.disable()
-        }
+        leaveCurrentMode(exiting: true)
+        mode = .extraDisplay
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
             NSApplication.shared.terminate(nil)
         }
     }
 
-    // MARK: - Global Hotkey
+    // MARK: - Global hotkey
 
     private func setupRecenterHotkey() {
         globalHotkeyMonitor = NSEvent.addGlobalMonitorForEvents(matching: .keyDown) { [weak self] event in
             // Cmd+Shift+R (keyCode 15 = R)
             if event.modifierFlags.contains([.command, .shift]) && event.keyCode == 15 {
-                self?.recenterSpatial()
+                self?.recenter()
             }
         }
     }
@@ -428,19 +569,39 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // MARK: - Icon
 
     private func updateIcon() {
-        if let button = statusItem.button {
-            if isSpatialActive {
-                let image = NSImage(systemSymbolName: "view.3d", accessibilityDescription: "UltraXReal Spatial")
-                let config = NSImage.SymbolConfiguration(paletteColors: [.systemCyan])
-                button.image = image?.withSymbolConfiguration(config)
-            } else if displayManager.isActive {
-                let image = NSImage(systemSymbolName: "display", accessibilityDescription: "UltraXReal Active")
-                let config = NSImage.SymbolConfiguration(paletteColors: [.systemGreen])
-                button.image = image?.withSymbolConfiguration(config)
-            } else {
-                button.image = NSImage(systemSymbolName: "display", accessibilityDescription: "UltraXReal")
-                button.image?.isTemplate = true
-            }
+        guard let button = statusItem.button else { return }
+        let symbol: String
+        let color: NSColor?
+        switch mode {
+        case .extraDisplay:
+            symbol = "display"; color = nil
+        case .mirror:
+            symbol = "rectangle.on.rectangle"; color = .systemGreen
+        case .chairs:
+            symbol = "cube"; color = .systemPurple
+        case .cinema:
+            symbol = "film"; color = .systemOrange
+        }
+        let image = NSImage(systemSymbolName: symbol, accessibilityDescription: "UltraXReal: \(mode.title)")
+        if let color {
+            button.image = image?.withSymbolConfiguration(NSImage.SymbolConfiguration(paletteColors: [color]))
+        } else {
+            button.image = image
+            button.image?.isTemplate = true
+        }
+    }
+}
+
+private func displayReconfigurationCallback(_ display: CGDirectDisplayID,
+                                            _ flags: CGDisplayChangeSummaryFlags,
+                                            _ userInfo: UnsafeMutableRawPointer?) {
+    if flags.contains(.addFlag) {
+        DispatchQueue.main.async {
+            (NSApp.delegate as? AppDelegate)?.handleDisplayAdded(display)
+        }
+    } else if flags.contains(.removeFlag) {
+        DispatchQueue.main.async {
+            (NSApp.delegate as? AppDelegate)?.handleDisplayRemoved(display)
         }
     }
 }

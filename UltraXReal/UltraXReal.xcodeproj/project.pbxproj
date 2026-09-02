@@ -8,17 +8,19 @@
 
 /* Begin PBXBuildFile section */
 		A10000010000000000000001 /* UltraXRealApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000001 /* UltraXRealApp.swift */; };
-		A10000010000000000000003 /* VirtualDisplayManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000003 /* VirtualDisplayManager.swift */; };
 		A10000010000000000000004 /* DisplayMirrorHelper.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000004 /* DisplayMirrorHelper.swift */; };
 		A10000010000000000000005 /* Settings.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000005 /* Settings.swift */; };
-		A10000010000000000000006 /* DisplayResolution.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000006 /* DisplayResolution.swift */; };
 		A10000010000000000000007 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A20000010000000000000007 /* Assets.xcassets */; };
 		A10000010000000000000008 /* CoreGraphics.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = A20000010000000000000008 /* CoreGraphics.framework */; };
 		A10000010000000000000009 /* AppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001000000000000000D /* AppDelegate.swift */; };
 		B10000010000000000000001 /* XRealIMUService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000001 /* XRealIMUService.swift */; };
-		B10000010000000000000002 /* SpatialTracker.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000002 /* SpatialTracker.swift */; };
-		B10000010000000000000003 /* SpatialRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000003 /* SpatialRenderer.swift */; };
-		B10000010000000000000004 /* SpatialShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000004 /* SpatialShaders.metal */; };
+		B10000010000000000000005 /* StereoSceneRenderer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000005 /* StereoSceneRenderer.swift */; };
+		B10000010000000000000006 /* StereoShaders.metal in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000006 /* StereoShaders.metal */; };
+		B10000010000000000000007 /* XRealMCUService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000007 /* XRealMCUService.swift */; };
+		B10000010000000000000008 /* CinemaPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000008 /* CinemaPlayer.swift */; };
+		B10000010000000000000009 /* TapDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000009 /* TapDetector.swift */; };
+		B1000001000000000000000A /* CinemaControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000A /* CinemaControlView.swift */; };
+		B10000010000000000000038 /* device_mcu.c in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000038 /* device_mcu.c */; };
 		B10000010000000000000010 /* hid.c in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000010 /* hid.c */; };
 		B10000010000000000000020 /* FusionAhrs.c in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000020 /* FusionAhrs.c */; };
 		B10000010000000000000021 /* FusionCompass.c in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000021 /* FusionCompass.c */; };
@@ -36,21 +38,24 @@
 /* Begin PBXFileReference section */
 		A20000010000000000000001 /* UltraXRealApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UltraXRealApp.swift; sourceTree = "<group>"; };
 		A20000010000000000000002 /* MenuBarView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MenuBarView.swift; sourceTree = "<group>"; };
-		A20000010000000000000003 /* VirtualDisplayManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VirtualDisplayManager.swift; sourceTree = "<group>"; };
 		A20000010000000000000004 /* DisplayMirrorHelper.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayMirrorHelper.swift; sourceTree = "<group>"; };
 		A20000010000000000000005 /* Settings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Settings.swift; sourceTree = "<group>"; };
-		A20000010000000000000006 /* DisplayResolution.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DisplayResolution.swift; sourceTree = "<group>"; };
 		A20000010000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		A20000010000000000000008 /* CoreGraphics.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = CoreGraphics.framework; path = System/Library/Frameworks/CoreGraphics.framework; sourceTree = SDKROOT; };
-		A20000010000000000000009 /* CGVirtualDisplay-Bridge.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "CGVirtualDisplay-Bridge.h"; sourceTree = "<group>"; };
+		A20000010000000000000009 /* UltraXReal-Bridging-Header.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = "UltraXReal-Bridging-Header.h"; sourceTree = "<group>"; };
 		A2000001000000000000000A /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		A2000001000000000000000B /* UltraXReal.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = UltraXReal.entitlements; sourceTree = "<group>"; };
 		A2000001000000000000000C /* UltraXReal.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = UltraXReal.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		A2000001000000000000000D /* AppDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDelegate.swift; sourceTree = "<group>"; };
 		B20000010000000000000001 /* XRealIMUService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XRealIMUService.swift; sourceTree = "<group>"; };
-		B20000010000000000000002 /* SpatialTracker.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialTracker.swift; sourceTree = "<group>"; };
-		B20000010000000000000003 /* SpatialRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SpatialRenderer.swift; sourceTree = "<group>"; };
-		B20000010000000000000004 /* SpatialShaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = SpatialShaders.metal; sourceTree = "<group>"; };
+		B20000010000000000000005 /* StereoSceneRenderer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StereoSceneRenderer.swift; sourceTree = "<group>"; };
+		B20000010000000000000006 /* StereoShaders.metal */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.metal; path = StereoShaders.metal; sourceTree = "<group>"; };
+		B20000010000000000000007 /* XRealMCUService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = XRealMCUService.swift; sourceTree = "<group>"; };
+		B20000010000000000000008 /* CinemaPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaPlayer.swift; sourceTree = "<group>"; };
+		B20000010000000000000009 /* TapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapDetector.swift; sourceTree = "<group>"; };
+		B2000001000000000000000A /* CinemaControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaControlView.swift; sourceTree = "<group>"; };
+		B20000010000000000000038 /* device_mcu.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = device_mcu.c; sourceTree = "<group>"; };
+		B20000010000000000000039 /* device_mcu.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = device_mcu.h; sourceTree = "<group>"; };
 		B20000010000000000000010 /* hid.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = hid.c; sourceTree = "<group>"; };
 		B20000010000000000000011 /* hidapi.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = hidapi.h; sourceTree = "<group>"; };
 		B20000010000000000000020 /* FusionAhrs.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = FusionAhrs.c; sourceTree = "<group>"; };
@@ -108,11 +113,9 @@
 			children = (
 				A20000010000000000000001 /* UltraXRealApp.swift */,
 				A2000001000000000000000D /* AppDelegate.swift */,
-				A20000010000000000000003 /* VirtualDisplayManager.swift */,
 				A20000010000000000000004 /* DisplayMirrorHelper.swift */,
 				A20000010000000000000005 /* Settings.swift */,
-				A20000010000000000000006 /* DisplayResolution.swift */,
-				A20000010000000000000009 /* CGVirtualDisplay-Bridge.h */,
+				A20000010000000000000009 /* UltraXReal-Bridging-Header.h */,
 				B40000010000000000000001 /* Spatial */,
 				B40000010000000000000005 /* Vendor */,
 				A20000010000000000000007 /* Assets.xcassets */,
@@ -146,9 +149,12 @@
 			isa = PBXGroup;
 			children = (
 				B20000010000000000000001 /* XRealIMUService.swift */,
-				B20000010000000000000002 /* SpatialTracker.swift */,
-				B20000010000000000000003 /* SpatialRenderer.swift */,
-				B20000010000000000000004 /* SpatialShaders.metal */,
+				B20000010000000000000005 /* StereoSceneRenderer.swift */,
+				B20000010000000000000006 /* StereoShaders.metal */,
+				B20000010000000000000007 /* XRealMCUService.swift */,
+				B20000010000000000000008 /* CinemaPlayer.swift */,
+				B20000010000000000000009 /* TapDetector.swift */,
+				B2000001000000000000000A /* CinemaControlView.swift */,
 			);
 			path = Spatial;
 			sourceTree = "<group>";
@@ -201,6 +207,8 @@
 				B20000010000000000000031 /* device_imu.c */,
 				B20000010000000000000032 /* hid_ids.c */,
 				B20000010000000000000033 /* crc32.c */,
+				B20000010000000000000038 /* device_mcu.c */,
+				B20000010000000000000039 /* device_mcu.h */,
 			);
 			path = "xreal-imu";
 			sourceTree = "<group>";
@@ -242,7 +250,7 @@
 			};
 			buildConfigurationList = A70000010000000000000002 /* Build configuration list for PBXProject "UltraXReal" */;
 			compatibilityVersion = "Xcode 14.0";
-			developmentRegion = en;
+			developmentRegion = ru;
 			hasScannedForEncodings = 0;
 			knownRegions = (
 				en,
@@ -275,15 +283,17 @@
 			buildActionMask = 2147483647;
 			files = (
 				A10000010000000000000001 /* UltraXRealApp.swift in Sources */,
-				A10000010000000000000003 /* VirtualDisplayManager.swift in Sources */,
 				A10000010000000000000004 /* DisplayMirrorHelper.swift in Sources */,
 				A10000010000000000000005 /* Settings.swift in Sources */,
-				A10000010000000000000006 /* DisplayResolution.swift in Sources */,
 				A10000010000000000000009 /* AppDelegate.swift in Sources */,
 				B10000010000000000000001 /* XRealIMUService.swift in Sources */,
-				B10000010000000000000002 /* SpatialTracker.swift in Sources */,
-				B10000010000000000000003 /* SpatialRenderer.swift in Sources */,
-				B10000010000000000000004 /* SpatialShaders.metal in Sources */,
+				B10000010000000000000005 /* StereoSceneRenderer.swift in Sources */,
+				B10000010000000000000006 /* StereoShaders.metal in Sources */,
+				B10000010000000000000007 /* XRealMCUService.swift in Sources */,
+				B10000010000000000000008 /* CinemaPlayer.swift in Sources */,
+				B10000010000000000000009 /* TapDetector.swift in Sources */,
+				B1000001000000000000000A /* CinemaControlView.swift in Sources */,
+				B10000010000000000000038 /* device_mcu.c in Sources */,
 				B10000010000000000000010 /* hid.c in Sources */,
 				B10000010000000000000020 /* FusionAhrs.c in Sources */,
 				B10000010000000000000021 /* FusionCompass.c in Sources */,
@@ -329,12 +339,12 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 2.0.0;
+				MARKETING_VERSION = 3.0.0;
 				OTHER_LDFLAGS = "-weak_framework ScreenCaptureKit";
 				PRODUCT_BUNDLE_IDENTIFIER = com.ultraxreal.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "UltraXReal/CGVirtualDisplay-Bridge.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "UltraXReal/UltraXReal-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Debug;
@@ -370,12 +380,12 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				MARKETING_VERSION = 2.0.0;
+				MARKETING_VERSION = 3.0.0;
 				OTHER_LDFLAGS = "-weak_framework ScreenCaptureKit";
 				PRODUCT_BUNDLE_IDENTIFIER = com.ultraxreal.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_OBJC_BRIDGING_HEADER = "UltraXReal/CGVirtualDisplay-Bridge.h";
+				SWIFT_OBJC_BRIDGING_HEADER = "UltraXReal/UltraXReal-Bridging-Header.h";
 				SWIFT_VERSION = 5.0;
 			};
 			name = Release;

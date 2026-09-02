@@ -947,7 +947,7 @@ device_imu_error_type device_imu_read(device_imu_type *device, int timeout)
 		gyroscope = FusionOffsetUpdate((FusionOffset *)device->offset, gyroscope);
 	}
 
-#ifndef NDEBUG
+#ifdef XREAL_IMU_TRACE_SAMPLES
 	printf("G: %.2f %.2f %.2f\n", gyroscope.axis.x, gyroscope.axis.y, gyroscope.axis.z);
 	printf("A: %.2f %.2f %.2f\n", accelerometer.axis.x, accelerometer.axis.y, accelerometer.axis.z);
 	printf("M: %.2f %.2f %.2f\n", magnetometer.axis.x, magnetometer.axis.y, magnetometer.axis.z);
