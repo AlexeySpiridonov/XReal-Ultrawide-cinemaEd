@@ -7,7 +7,7 @@ enum GlassesMode: Int {
     case extraDisplay = 1   // glasses are a regular extended display, 1:1
     case mirror = 2         // glasses mirror the built-in display
     case cinema = 3         // a video fullscreen on the glasses, sound in the glasses
-    case demo = 4         // stereo 3D demo: standing inside Stonehenge
+    case demo = 4           // stereo 3D demo: standing inside Stonehenge
 
     var title: String {
         switch self {
@@ -19,6 +19,28 @@ enum GlassesMode: Int {
     }
 
     var usesStereo: Bool { self == .demo }
+    var usesIMU: Bool { self == .demo || self == .cinema }
+}
+
+/// Remembers that *we* switched the glasses to side-by-side and what to put back.
+/// Written from the HID queue, read from the main thread and the exit path, hence the lock.
+private final class StereoRestoreState {
+    private let lock = NSLock()
+    private var previousMode: UInt8?
+
+    var isSet: Bool { lock.lock(); defer { lock.unlock() }; return previousMode != nil }
+
+    func remember(_ mode: UInt8) {
+        lock.lock(); previousMode = mode; lock.unlock()
+    }
+
+    /// Returns and clears the remembered mode.
+    func take() -> UInt8? {
+        lock.lock(); defer { lock.unlock() }
+        let mode = previousMode
+        previousMode = nil
+        return mode
+    }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -31,11 +53,13 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // Mirror mode
     private var mirroredGlassesID: CGDirectDisplayID?
 
-    // Stereo mode (3D demo)
+    // IMU (shared by the stereo demo and the cinema's tap detection)
     private var imuService: XRealIMUService?
+
+    // Stereo mode (3D demo)
     private var stereoRenderer: StereoSceneRenderer?
     private var stereoStatus: String?
-    private var stereoPreviousMode: UInt8?
+    private let stereoRestore = StereoRestoreState()
     private var stereoEnableGeneration = 0
 
     // Cinema
@@ -50,6 +74,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var glassesDisconnectedNotice = false
 
     private var isStereoActive: Bool { stereoRenderer != nil }
+    /// True while any mode holds the glasses (including a stereo switch still in flight).
+    private var glassesInUse: Bool { mode != .extraDisplay || stereoRestore.isSet }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -59,6 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         setupDisplayReconfigurationCallback()
         startGlassesWatchdog()
         DisplayMirrorHelper.applyBestModeToXReal()
+        restoreTwoDIfLeftInSideBySide()
         buildMenu()
 
         // Launch arguments for development: `--stereo` starts the 3D demo, `--cinema <file>` the cinema.
@@ -134,8 +161,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             info.isEnabled = false
             menu.addItem(info)
 
-            if let best = DisplayMirrorHelper.bestMode(for: glassesID),
-               best.pixelWidth != current.pixelWidth || best.pixelHeight != current.pixelHeight || best.refreshRate != current.refreshRate {
+            if let best = DisplayMirrorHelper.bestMode(for: glassesID), !DisplayMirrorHelper.sameMode(best, current) {
                 let fixItem = NSMenuItem(title: "Switch Glasses to \(Self.describe(best))",
                                          action: #selector(applyBestGlassesMode), keyEquivalent: "")
                 fixItem.target = self
@@ -165,7 +191,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 statusLines.append("Cinema: glasses display not found")
             }
         } else if mode == .mirror {
-            statusLines.append(mirroredGlassesID != nil ? "Mirror: main display → glasses" : "Mirror: glasses not found")
+            statusLines.append(mirroredGlassesID != nil ? "Mirror: main display → glasses" : "Mirror: could not mirror onto the glasses")
         } else if glassesDisconnectedNotice {
             statusLines.append("Glasses unplugged, modes stopped")
         } else if glassesID == nil {
@@ -239,21 +265,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Undoes whatever the current mode did to the glasses.
+    /// - Parameter exiting: the process is about to exit, so restore the glasses synchronously.
     private func leaveCurrentMode(exiting: Bool = false) {
         switch mode {
         case .mirror:
             disableMirror()
         case .demo:
-            disableStereo(waitForGlasses: exiting)
+            disableStereo()
         case .cinema:
             disableCinema()
         case .extraDisplay:
             break
         }
-        // A stereo enable may still be pending (glasses switched, display not back yet).
-        if stereoPreviousMode != nil {
-            disableStereo(waitForGlasses: exiting)
-        }
+        // Covers a stereo switch that is still in flight: the HID queue is serial, so the restore
+        // runs after the pending switch and finds what it recorded.
+        restoreGlassesDisplayMode(synchronously: exiting)
     }
 
     // MARK: - Mode 1: extra display
@@ -273,7 +299,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             return
         }
         let mainID = CGMainDisplayID()
-        if DisplayMirrorHelper.mirror(virtualDisplayID: mainID, onto: glassesID) {
+        if DisplayMirrorHelper.mirror(mainID, onto: glassesID) {
             mirroredGlassesID = glassesID
         } else {
             print("[Mirror] Failed to mirror display \(mainID) onto glasses \(glassesID)")
@@ -288,13 +314,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    // MARK: - Mode 4: cinema
+    // MARK: - Mode 3: cinema
 
     private func enableCinema(url: URL) {
-        if let glassesID = DisplayMirrorHelper.findXRealDisplay() {
-            DisplayMirrorHelper.unmirror(displayID: glassesID)
-            DisplayMirrorHelper.applyBestMode(to: glassesID)
-        }
+        enableExtraDisplay()
         let player = CinemaPlayer(url: url)
         guard player.start() else {
             cinemaPlayer = nil
@@ -303,15 +326,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         cinemaPlayer = player
 
         // Double tap on the glasses toggles pause. Needs the IMU stream for the accelerometer.
-        let imu = XRealIMUService()
-        imu.start()
-        imuService = imu
-
         let detector = TapDetector()
         detector.onDoubleTap = { [weak self] in
             self?.cinemaPlayer?.togglePause()
         }
         tapDetector = detector
+        let imu = startIMU()
         tapSubscription = imu.accelerationSubject.sink { sample in
             detector.process(time: sample.time, magnitude: sample.magnitude)
         }
@@ -321,8 +341,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         tapSubscription?.cancel()
         tapSubscription = nil
         tapDetector = nil
-        imuService?.stop()
-        imuService = nil
+        stopIMU()
         cinemaPlayer?.stop()
         cinemaPlayer = nil
     }
@@ -338,39 +357,61 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         return panel.runModal() == .OK ? panel.url : nil
     }
 
+    // MARK: - IMU
+
+    @discardableResult
+    private func startIMU() -> XRealIMUService {
+        if let imuService { return imuService }
+        let imu = XRealIMUService()
+        imu.start()
+        imuService = imu
+        return imu
+    }
+
+    private func stopIMU() {
+        imuService?.stop()
+        imuService = nil
+    }
+
     // MARK: - Mode 4: stereo 3D demo
 
     private func enableStereo() {
-        // Already side-by-side if the glasses currently present a 3840-wide panel.
-        let alreadySBS: Bool
-        if let glassesID = DisplayMirrorHelper.findXRealDisplay() {
-            alreadySBS = CGDisplayPixelsWide(glassesID) >= 3000
-        } else {
-            alreadySBS = false
-        }
-
         stereoStatus = "switching glasses to 3D…"
         buildMenu()
         stereoEnableGeneration += 1
         let generation = stereoEnableGeneration
 
-        // MCU calls block while waiting for the glasses, keep them off the main thread.
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        // MCU calls block while waiting for the glasses; they run on the serial HID queue, so this
+        // also waits behind any restore-to-2D still in flight from a previous demo.
+        GlassesHID.queue.async { [weak self] in
             let previous = XRealMCUService.readDisplayMode()
             print("[Stereo] Glasses display mode before: \(previous.map { "0x" + String($0, radix: 16) } ?? "unknown")")
 
-            let switched = alreadySBS || XRealMCUService.setDisplayMode(XRealMCUService.sideBySideMode)
+            let alreadySBS = previous.map(XRealMCUService.isSideBySide) ?? DisplayMirrorHelper.isXRealSideBySide()
+            var switched = alreadySBS
+            if !alreadySBS {
+                switched = XRealMCUService.setDisplayMode(XRealMCUService.sideBySideMode)
+                if switched {
+                    // Recorded before any cancellation check: the glasses are switched no matter what.
+                    self?.stereoRestore.remember(previous ?? XRealMCUService.default2DMode)
+                }
+            }
 
             DispatchQueue.main.async {
-                guard let self, generation == self.stereoEnableGeneration else { return }
-                self.stereoPreviousMode = alreadySBS ? nil : previous
+                guard let self else { return }
+                guard generation == self.stereoEnableGeneration else {
+                    // Cancelled meanwhile (another mode or quit): undo the switch if we made one.
+                    self.restoreGlassesDisplayMode()
+                    return
+                }
                 if !switched {
                     print("[Stereo] Glasses did not switch to SBS, continuing in mono")
                 }
                 self.stereoStatus = switched ? "waiting for the display to reconnect (up to a minute)…" : "glasses did not switch to 3D, starting mono"
                 self.buildMenu()
-                // The glasses take 8–25 s to come back as a 3840x1080 display.
-                self.waitForGlassesDisplay(minWidth: switched ? 3000 : 0, attempts: 60) { [weak self] in
+                // The glasses take 8–25 s to come back as a 3840x1080 display (twice that after a quick re-entry).
+                let minWidth = switched ? DisplayMirrorHelper.sideBySideMinPixelWidth : 0
+                self.waitForGlassesDisplay(minWidth: minWidth, attempts: 90) { [weak self] in
                     guard let self, generation == self.stereoEnableGeneration else { return }
                     self.startStereoPipeline()
                 }
@@ -379,14 +420,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Polls until the glasses' display is back (they re-enumerate after a mode switch)
-    /// and wide enough, applying the best mode along the way. Always calls completion.
+    /// and wide enough. Always calls completion.
     private func waitForGlassesDisplay(minWidth: Int, attempts: Int, completion: @escaping () -> Void) {
-        if let glassesID = DisplayMirrorHelper.findXRealDisplay() {
+        if let glassesID = DisplayMirrorHelper.findXRealDisplay(), CGDisplayPixelsWide(glassesID) >= minWidth {
             DisplayMirrorHelper.applyBestMode(to: glassesID)
-            if CGDisplayPixelsWide(glassesID) >= minWidth {
-                DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: completion)
-                return
-            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: completion)
+            return
         }
         guard attempts > 0 else {
             print("[Stereo] Timed out waiting for the glasses' display")
@@ -399,15 +438,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func startStereoPipeline() {
-        let imu = XRealIMUService()
-        imu.start()
-        imuService = imu
-
+        let imu = startIMU()
         let renderer = StereoSceneRenderer(imuService: imu)
         guard renderer.start() else {
             stereoStatus = "glasses display not found"
-            imu.stop()
-            imuService = nil
+            stopIMU()
             restoreGlassesDisplayMode()
             buildMenu()
             return
@@ -423,31 +458,38 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// - Parameter waitForGlasses: restore the glasses' 2D mode on the current thread
-    ///   (needed when the process is about to exit).
-    private func disableStereo(waitForGlasses: Bool = false) {
+    private func disableStereo() {
         stereoEnableGeneration += 1  // cancels a pending enable
         stereoRenderer?.stop()
         stereoRenderer = nil
-        imuService?.stop()
-        imuService = nil
+        stopIMU()
         stereoStatus = nil
-
-        restoreGlassesDisplayMode(synchronously: waitForGlasses)
     }
 
-    /// Returns the glasses to the 2D mode they were in before the stereo mode.
-    /// Does nothing if the glasses were already side-by-side when it started.
+    /// Returns the glasses to the 2D mode recorded when we switched them to side-by-side.
+    /// No-op when we did not switch them. Runs on the serial HID queue, after any switch in flight.
+    /// - Parameter synchronously: block until done (the process is about to exit); skips the read-back.
     private func restoreGlassesDisplayMode(synchronously: Bool = false) {
-        guard let previous = stereoPreviousMode else { return }
-        stereoPreviousMode = nil
-        let target = previous == XRealMCUService.sideBySideMode ? XRealMCUService.default2DMode : previous
+        let restore = stereoRestore
+        let work = {
+            guard let previous = restore.take() else { return }
+            let target = XRealMCUService.isSideBySide(code: previous) ? XRealMCUService.default2DMode : previous
+            XRealMCUService.setDisplayMode(target, verify: !synchronously)
+        }
         if synchronously {
-            XRealMCUService.setDisplayMode(target)
+            GlassesHID.sync(work)
         } else {
-            DispatchQueue.global(qos: .userInitiated).async {
-                XRealMCUService.setDisplayMode(target)
-            }
+            GlassesHID.queue.async(execute: work)
+        }
+    }
+
+    /// Glasses found in side-by-side while no stereo mode is running (crash, kill, unplug mid-demo):
+    /// put them back to 2D.
+    private func restoreTwoDIfLeftInSideBySide() {
+        guard !mode.usesStereo, !stereoRestore.isSet, DisplayMirrorHelper.isXRealSideBySide() else { return }
+        print("[Glasses] Found in side-by-side mode, restoring 2D")
+        GlassesHID.queue.async {
+            XRealMCUService.setDisplayMode(XRealMCUService.default2DMode)
         }
     }
 
@@ -464,11 +506,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    /// Switches the glasses to their best mode whenever they get (re)connected.
     private func setupDisplayReconfigurationCallback() {
         CGDisplayRegisterReconfigurationCallback(displayReconfigurationCallback, nil)
     }
 
+    /// The glasses' display (re)appeared: best mode, re-apply what the current mode needs.
     fileprivate func handleDisplayAdded(_ displayID: CGDirectDisplayID) {
         guard displayID == DisplayMirrorHelper.findXRealDisplay() else { return }
         // Give macOS a moment to finish bringing the display up
@@ -477,28 +519,22 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             DisplayMirrorHelper.applyBestMode(to: displayID)
             self.glassesDisconnectedNotice = false
 
-            // Glasses that were unplugged mid-stereo come back side-by-side; put them back to 2D.
-            if !self.mode.usesStereo, self.stereoPreviousMode == nil, CGDisplayPixelsWide(displayID) >= 3000 {
-                print("[Glasses] Reconnected in side-by-side mode, restoring 2D")
-                DispatchQueue.global(qos: .userInitiated).async {
-                    XRealMCUService.setDisplayMode(XRealMCUService.default2DMode)
-                }
+            if self.mode == .mirror {
+                // The display came back with a new ID; the mirror was configured on the old one.
+                self.enableMirror()
             }
+            self.restoreTwoDIfLeftInSideBySide()
             self.buildMenu()
         }
     }
 
     fileprivate func handleDisplayRemoved(_ displayID: CGDirectDisplayID) {
-        // Output windows hide themselves at once (see CinemaPlayer / StereoSceneRenderer).
-        // The display also disappears during a 2D/SBS switch, so decide by USB presence:
-        // no USB device one second later and no stereo switch in progress means unplugged.
+        // Output windows hide themselves at once (GlassesOutputWindow). The display also disappears
+        // during a 2D/SBS switch while the USB device stays present, so decide by USB presence.
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self else { return }
-            let stereoSwitchInProgress = self.stereoPreviousMode != nil && self.stereoRenderer == nil
-            if !stereoSwitchInProgress, !XRealIMUService.isDeviceAvailable() {
+            if !XRealIMUService.isDeviceAvailable() {
                 self.handleGlassesDisconnected()
-            } else {
-                self.checkGlassesPresence()
             }
         }
     }
@@ -507,27 +543,25 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Polls USB presence of the glasses; three misses in a row count as unplugged.
     private func startGlassesWatchdog() {
-        glassesWatchdog = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
+        let timer = Timer.scheduledTimer(withTimeInterval: 2.0, repeats: true) { [weak self] _ in
             self?.checkGlassesPresence()
         }
+        timer.tolerance = 1.0
+        glassesWatchdog = timer
     }
 
     private func checkGlassesPresence() {
-        let somethingActive = mode != .extraDisplay || stereoPreviousMode != nil || cinemaPlayer != nil
-        guard somethingActive else {
+        let available = XRealIMUService.isDeviceAvailable()
+        if available, glassesDisconnectedNotice {
+            glassesDisconnectedNotice = false
+            buildMenu()
+        }
+        guard glassesInUse else {
             missedGlassesChecks = 0
-            if glassesDisconnectedNotice, XRealIMUService.isDeviceAvailable() {
-                glassesDisconnectedNotice = false
-                buildMenu()
-            }
             return
         }
-        if XRealIMUService.isDeviceAvailable() {
+        if available {
             missedGlassesChecks = 0
-            if glassesDisconnectedNotice {
-                glassesDisconnectedNotice = false
-                buildMenu()
-            }
             return
         }
         missedGlassesChecks += 1
@@ -539,10 +573,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     /// Shuts down everything that touches the glasses without trying to talk to them.
     private func handleGlassesDisconnected() {
-        guard mode != .extraDisplay || stereoPreviousMode != nil || cinemaPlayer != nil else { return }
+        guard glassesInUse else { return }
         print("[Glasses] Unplugged, shutting down \(mode.title)")
         stereoEnableGeneration += 1     // cancel a pending stereo enable
-        stereoPreviousMode = nil        // nothing to restore, the glasses are gone
+        _ = stereoRestore.take()        // nothing to restore, the glasses are gone
         leaveCurrentMode()
         mode = .extraDisplay
         glassesDisconnectedNotice = true
@@ -570,11 +604,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc private func quit() {
-        leaveCurrentMode(exiting: true)
-        mode = .extraDisplay
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
-            NSApplication.shared.terminate(nil)
-        }
+        NSApplication.shared.terminate(nil)  // applicationWillTerminate restores the glasses
     }
 
     // MARK: - Global hotkey

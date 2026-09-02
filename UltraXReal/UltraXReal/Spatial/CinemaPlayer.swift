@@ -7,12 +7,9 @@ import CoreAudio
 final class CinemaPlayer {
 
     let url: URL
-    private var window: NSWindow?
+    private let output = GlassesOutputWindow(tag: "Cinema")
     private var player: AVPlayer?
     private var endObserver: NSObjectProtocol?
-    private var screenObserver: NSObjectProtocol?
-    /// Set while the glasses' display is gone; playback resumes when it returns.
-    private var hiddenBecauseNoGlasses = false
     private var wasPlayingBeforeHide = false
 
     private(set) var audioDeviceName: String?
@@ -28,7 +25,7 @@ final class CinemaPlayer {
     /// Returns false if the glasses' display is not present.
     @discardableResult
     func start() -> Bool {
-        guard let screen = Self.findXRealScreen() else {
+        guard let screen = DisplayMirrorHelper.findXRealScreen() else {
             print("[Cinema] XReal Air display not found")
             return false
         }
@@ -51,21 +48,19 @@ final class CinemaPlayer {
         playerLayer.videoGravity = .resizeAspect
         view.layer?.addSublayer(playerLayer)
 
-        // With `screen:` the content rect is relative to that screen's origin.
-        let window = NSWindow(
-            contentRect: CGRect(origin: .zero, size: screen.frame.size),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false,
-            screen: screen
-        )
-        window.level = .screenSaver
-        window.isOpaque = true
-        window.backgroundColor = .black
-        window.contentView = view
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.makeKeyAndOrderFront(nil)
-        self.window = window
+        guard output.open(contentView: view) != nil else {
+            return false
+        }
+        // Pause while the glasses' display is away so no sound leaks to the Mac; resume when it is back.
+        output.onHide = { [weak self] in
+            guard let self, let player = self.player else { return }
+            self.wasPlayingBeforeHide = player.rate > 0
+            player.pause()
+        }
+        output.onShow = { [weak self] _ in
+            guard let self, self.wasPlayingBeforeHide else { return }
+            self.player?.play()
+        }
 
         endObserver = NotificationCenter.default.addObserver(
             forName: .AVPlayerItemDidPlayToEndTime, object: player.currentItem, queue: .main
@@ -73,39 +68,8 @@ final class CinemaPlayer {
             print("[Cinema] Playback finished")
         }
 
-        // macOS moves windows of a vanished display onto the main display. Never let that show.
-        screenObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.syncToGlassesScreen()
-        }
-
         player.play()
         return true
-    }
-
-    /// Hides the window and pauses the moment the glasses' display disappears; brings it back when it returns.
-    private func syncToGlassesScreen() {
-        guard let window, let player else { return }
-        guard let screen = Self.findXRealScreen() else {
-            if !hiddenBecauseNoGlasses {
-                hiddenBecauseNoGlasses = true
-                wasPlayingBeforeHide = player.rate > 0
-                player.pause()
-                window.orderOut(nil)
-                print("[Cinema] Glasses display gone, hiding")
-            }
-            return
-        }
-        if hiddenBecauseNoGlasses || window.screen != screen {
-            window.setFrame(screen.frame, display: true)
-            window.orderFront(nil)
-            if hiddenBecauseNoGlasses && wasPlayingBeforeHide {
-                player.play()
-            }
-            hiddenBecauseNoGlasses = false
-            print("[Cinema] Back on the glasses display")
-        }
     }
 
     func stop() {
@@ -113,14 +77,9 @@ final class CinemaPlayer {
             NotificationCenter.default.removeObserver(endObserver)
             self.endObserver = nil
         }
-        if let screenObserver {
-            NotificationCenter.default.removeObserver(screenObserver)
-            self.screenObserver = nil
-        }
         player?.pause()
         player = nil
-        window?.orderOut(nil)
-        window = nil
+        output.close()
     }
 
     var isPlaying: Bool { (player?.rate ?? 0) > 0 }
@@ -158,13 +117,6 @@ final class CinemaPlayer {
     }
 
     // MARK: - Helpers
-
-    private static func findXRealScreen() -> NSScreen? {
-        guard let displayID = DisplayMirrorHelper.findXRealDisplay() else { return nil }
-        return NSScreen.screens.first {
-            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == displayID
-        }
-    }
 
     /// The glasses' USB audio output, found by name.
     private static func findGlassesAudioDevice() -> (uid: String, name: String)? {

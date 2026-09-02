@@ -1,11 +1,31 @@
+import AppKit
 import CoreGraphics
 import Foundation
 
-/// Helpers for display mirroring using CoreGraphics configuration APIs.
-///
-/// Attempts to mirror the virtual display onto the XReal Air's physical panel.
-/// Falls back gracefully if mirroring cannot be automated.
+/// Finds the glasses' display and configures it: display mode, mirroring, side-by-side detection.
 enum DisplayMirrorHelper {
+
+    /// A panel at least this wide is the glasses in side-by-side 3D mode (3840x1080).
+    static let sideBySideMinPixelWidth = 3000
+
+    static func isSideBySide(_ displayID: CGDirectDisplayID) -> Bool {
+        CGDisplayPixelsWide(displayID) >= sideBySideMinPixelWidth
+    }
+
+    /// True when the glasses are present and currently side-by-side.
+    static func isXRealSideBySide() -> Bool {
+        findXRealDisplay().map(isSideBySide) ?? false
+    }
+
+    static func displayID(of screen: NSScreen) -> CGDirectDisplayID? {
+        screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID
+    }
+
+    /// The NSScreen of the glasses' display, if present.
+    static func findXRealScreen() -> NSScreen? {
+        guard let displayID = findXRealDisplay() else { return nil }
+        return NSScreen.screens.first { self.displayID(of: $0) == displayID }
+    }
 
     // Known XReal/Nreal vendor IDs (USB vendor ID space)
     private static let xrealVendorIDs: Set<UInt32> = [
@@ -15,7 +35,7 @@ enum DisplayMirrorHelper {
     ]
 
     /// Attempts to find the XReal Air display among online displays.
-    /// Uses vendor ID matching first, falls back to 1920×1080 non-builtin heuristic.
+    /// Uses vendor ID matching first, falls back to a 1920×1080 non-builtin heuristic.
     static func findXRealDisplay(excludingDisplayID: CGDirectDisplayID? = nil) -> CGDirectDisplayID? {
         var displayIDs = [CGDirectDisplayID](repeating: 0, count: 16)
         var displayCount: UInt32 = 0
@@ -35,8 +55,7 @@ enum DisplayMirrorHelper {
             }
         }
 
-        // Second pass: fall back to first external 1920×1080 display
-        // that isn't our virtual display or the built-in
+        // Second pass: fall back to the first external 1920×1080 display
         for i in 0..<Int(displayCount) {
             let id = displayIDs[i]
             if id == excludingDisplayID { continue }
@@ -70,16 +89,17 @@ enum DisplayMirrorHelper {
         }
     }
 
+    static func sameMode(_ a: CGDisplayMode, _ b: CGDisplayMode) -> Bool {
+        a.pixelWidth == b.pixelWidth && a.pixelHeight == b.pixelHeight && a.refreshRate == b.refreshRate
+    }
+
     /// Switches the display to its best mode (see `bestMode(for:)`), persisting across reconnects.
     /// Returns true if the mode was already set or has been changed successfully.
     @discardableResult
     static func applyBestMode(to displayID: CGDirectDisplayID) -> Bool {
         guard let best = bestMode(for: displayID) else { return false }
 
-        if let current = CGDisplayCopyDisplayMode(displayID),
-           current.pixelWidth == best.pixelWidth,
-           current.pixelHeight == best.pixelHeight,
-           current.refreshRate == best.refreshRate {
+        if let current = CGDisplayCopyDisplayMode(displayID), sameMode(current, best) {
             return true
         }
 
@@ -105,9 +125,9 @@ enum DisplayMirrorHelper {
         return applyBestMode(to: xrealID)
     }
 
-    /// Mirror the virtual display onto the target physical display.
+    /// Make `targetDisplayID` mirror `sourceDisplayID`.
     @discardableResult
-    static func mirror(virtualDisplayID: CGDirectDisplayID, onto targetDisplayID: CGDirectDisplayID) -> Bool {
+    static func mirror(_ sourceDisplayID: CGDirectDisplayID, onto targetDisplayID: CGDirectDisplayID) -> Bool {
         var config: CGDisplayConfigRef?
 
         guard CGBeginDisplayConfiguration(&config) == .success,
@@ -115,7 +135,7 @@ enum DisplayMirrorHelper {
             return false
         }
 
-        let mirrorErr = CGConfigureDisplayMirrorOfDisplay(config, targetDisplayID, virtualDisplayID)
+        let mirrorErr = CGConfigureDisplayMirrorOfDisplay(config, targetDisplayID, sourceDisplayID)
         guard mirrorErr == .success else {
             CGCancelDisplayConfiguration(config)
             return false

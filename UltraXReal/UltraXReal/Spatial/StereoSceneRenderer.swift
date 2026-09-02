@@ -79,10 +79,8 @@ final class StereoSceneRenderer: NSObject, ObservableObject {
     private var groundVertexCount = 0
 
     // Output
-    private var outputWindow: NSWindow?
+    private let output = GlassesOutputWindow(tag: "Stereo")
     private var metalView: MTKView!
-    private var screenObserver: NSObjectProtocol?
-    private var hiddenBecauseNoGlasses = false
 
     private let startTime = CACurrentMediaTime()
     private var frameCount = 0
@@ -123,14 +121,9 @@ final class StereoSceneRenderer: NSObject, ObservableObject {
         isRunning = false
         fpsTimer?.invalidate()
         fpsTimer = nil
-        if let screenObserver {
-            NotificationCenter.default.removeObserver(screenObserver)
-            self.screenObserver = nil
-        }
 
         metalView?.isPaused = true
-        outputWindow?.orderOut(nil)
-        outputWindow = nil
+        output.close()
         metalView = nil
     }
 
@@ -192,11 +185,8 @@ final class StereoSceneRenderer: NSObject, ObservableObject {
     }
 
     private func setupOutputWindow() -> Bool {
-        guard let screen = findXRealScreen() else { return false }
-
-        let pixelWidth = screen.frame.width * screen.backingScaleFactor
-        eyeCount = pixelWidth >= 3000 ? 2 : 1
-        print("[Stereo] Output \(Int(pixelWidth))px wide, \(eyeCount == 2 ? "side-by-side stereo" : "mono fallback")")
+        guard let screen = DisplayMirrorHelper.findXRealScreen() else { return false }
+        updateEyeCount(for: screen)
 
         metalView = MTKView(frame: CGRect(origin: .zero, size: screen.frame.size), device: metalDevice)
         metalView.delegate = self
@@ -209,56 +199,21 @@ final class StereoSceneRenderer: NSObject, ObservableObject {
         metalView.isPaused = false
         metalView.enableSetNeedsDisplay = false
 
-        // With `screen:` the content rect is relative to that screen's origin.
-        let window = NSWindow(
-            contentRect: CGRect(origin: .zero, size: screen.frame.size),
-            styleMask: [.borderless],
-            backing: .buffered,
-            defer: false,
-            screen: screen
-        )
-        window.level = .screenSaver
-        window.isOpaque = true
-        window.backgroundColor = .black
-        window.contentView = metalView
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
-        window.makeKeyAndOrderFront(nil)
-        outputWindow = window
-
-        // macOS moves windows of a vanished display onto the main display. Never let that show.
-        screenObserver = NotificationCenter.default.addObserver(
-            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            self?.syncToGlassesScreen()
+        guard output.open(contentView: metalView) != nil else { return false }
+        output.onHide = { [weak self] in self?.metalView?.isPaused = true }
+        output.onShow = { [weak self] screen in
+            guard let self else { return }
+            // The panel may come back in a different mode (2D after a loose cable): re-derive the layout.
+            self.updateEyeCount(for: screen)
+            self.metalView?.isPaused = false
         }
         return true
     }
 
-    private func syncToGlassesScreen() {
-        guard let window = outputWindow else { return }
-        guard let screen = findXRealScreen() else {
-            if !hiddenBecauseNoGlasses {
-                hiddenBecauseNoGlasses = true
-                metalView?.isPaused = true
-                window.orderOut(nil)
-                print("[Stereo] Glasses display gone, hiding")
-            }
-            return
-        }
-        if hiddenBecauseNoGlasses || window.screen != screen {
-            window.setFrame(screen.frame, display: true)
-            window.orderFront(nil)
-            metalView?.isPaused = false
-            hiddenBecauseNoGlasses = false
-            print("[Stereo] Back on the glasses display")
-        }
-    }
-
-    private func findXRealScreen() -> NSScreen? {
-        guard let displayID = DisplayMirrorHelper.findXRealDisplay() else { return nil }
-        return NSScreen.screens.first {
-            ($0.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID) == displayID
-        }
+    private func updateEyeCount(for screen: NSScreen) {
+        let pixelWidth = Int(screen.frame.width * screen.backingScaleFactor)
+        eyeCount = pixelWidth >= DisplayMirrorHelper.sideBySideMinPixelWidth ? 2 : 1
+        print("[Stereo] Output \(pixelWidth)px wide, \(eyeCount == 2 ? "side-by-side stereo" : "mono fallback")")
     }
 
     // MARK: - Scene: Stonehenge

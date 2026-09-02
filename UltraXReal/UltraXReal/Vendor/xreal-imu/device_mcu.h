@@ -16,15 +16,19 @@
 extern "C" {
 #endif
 
+// Display mode codes as listed by the open Linux driver. Only two are verified on hardware here
+// (XReal Air 2 Pro): 0x03 = side-by-side 3840x1080@60, and 0x0B = plain 2D 1920x1080@120 (the factory
+// default), which contradicts the Linux table below for 0x0B. Treat the rest as unverified;
+// the Swift side (XRealMCUService) is the source of truth for which codes mean side-by-side.
 enum device_mcu_display_mode_t {
     DEVICE_MCU_DISPLAY_MODE_1920x1080x60  = 0x1,
-    DEVICE_MCU_DISPLAY_MODE_3840x1080x60  = 0x3,  // side-by-side 3D
+    DEVICE_MCU_DISPLAY_MODE_3840x1080x60  = 0x3,  // side-by-side 3D (verified)
     DEVICE_MCU_DISPLAY_MODE_1920x1080x72  = 0x4,
     DEVICE_MCU_DISPLAY_MODE_1920x1080x90  = 0x5,
-    DEVICE_MCU_DISPLAY_MODE_3840x1080x72  = 0x8,  // side-by-side 3D
-    DEVICE_MCU_DISPLAY_MODE_3840x1080x90  = 0x9,  // side-by-side 3D
+    DEVICE_MCU_DISPLAY_MODE_3840x1080x72  = 0x8,  // side-by-side 3D (per Linux driver)
+    DEVICE_MCU_DISPLAY_MODE_3840x1080x90  = 0x9,  // side-by-side 3D (per Linux driver)
     DEVICE_MCU_DISPLAY_MODE_1920x1080x120 = 0xA,
-    DEVICE_MCU_DISPLAY_MODE_3840x1080x120 = 0xB,  // side-by-side 3D
+    DEVICE_MCU_DISPLAY_MODE_3840x1080x120 = 0xB,  // per Linux driver; on Air 2 Pro this is 2D 120 Hz
 };
 
 /// Current display mode as reported by the glasses, or -1 on failure.

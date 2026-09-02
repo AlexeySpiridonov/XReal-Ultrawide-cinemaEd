@@ -20,6 +20,8 @@
 		B10000010000000000000008 /* CinemaPlayer.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000008 /* CinemaPlayer.swift */; };
 		B10000010000000000000009 /* TapDetector.swift in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000009 /* TapDetector.swift */; };
 		B1000001000000000000000A /* CinemaControlView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000A /* CinemaControlView.swift */; };
+		B1000001000000000000000B /* GlassesHID.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000B /* GlassesHID.swift */; };
+		B1000001000000000000000C /* GlassesOutputWindow.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2000001000000000000000C /* GlassesOutputWindow.swift */; };
 		B10000010000000000000038 /* device_mcu.c in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000038 /* device_mcu.c */; };
 		B10000010000000000000010 /* hid.c in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000010 /* hid.c */; };
 		B10000010000000000000020 /* FusionAhrs.c in Sources */ = {isa = PBXBuildFile; fileRef = B20000010000000000000020 /* FusionAhrs.c */; };
@@ -54,6 +56,8 @@
 		B20000010000000000000008 /* CinemaPlayer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaPlayer.swift; sourceTree = "<group>"; };
 		B20000010000000000000009 /* TapDetector.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TapDetector.swift; sourceTree = "<group>"; };
 		B2000001000000000000000A /* CinemaControlView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CinemaControlView.swift; sourceTree = "<group>"; };
+		B2000001000000000000000B /* GlassesHID.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassesHID.swift; sourceTree = "<group>"; };
+		B2000001000000000000000C /* GlassesOutputWindow.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = GlassesOutputWindow.swift; sourceTree = "<group>"; };
 		B20000010000000000000038 /* device_mcu.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = device_mcu.c; sourceTree = "<group>"; };
 		B20000010000000000000039 /* device_mcu.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = device_mcu.h; sourceTree = "<group>"; };
 		B20000010000000000000010 /* hid.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = hid.c; sourceTree = "<group>"; };
@@ -155,6 +159,8 @@
 				B20000010000000000000008 /* CinemaPlayer.swift */,
 				B20000010000000000000009 /* TapDetector.swift */,
 				B2000001000000000000000A /* CinemaControlView.swift */,
+				B2000001000000000000000B /* GlassesHID.swift */,
+				B2000001000000000000000C /* GlassesOutputWindow.swift */,
 			);
 			path = Spatial;
 			sourceTree = "<group>";
@@ -293,6 +299,8 @@
 				B10000010000000000000008 /* CinemaPlayer.swift in Sources */,
 				B10000010000000000000009 /* TapDetector.swift in Sources */,
 				B1000001000000000000000A /* CinemaControlView.swift in Sources */,
+				B1000001000000000000000B /* GlassesHID.swift in Sources */,
+				B1000001000000000000000C /* GlassesOutputWindow.swift in Sources */,
 				B10000010000000000000038 /* device_mcu.c in Sources */,
 				B10000010000000000000010 /* hid.c in Sources */,
 				B10000010000000000000020 /* FusionAhrs.c in Sources */,
