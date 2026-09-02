@@ -119,24 +119,33 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             menu.addItem(NSMenuItem.separator())
         }
 
-        // Recenter (stereo mode)
-        let recenterItem = NSMenuItem(title: "Recenter (Cmd+Shift+R)", action: #selector(recenter), keyEquivalent: "")
-        recenterItem.target = self
-        recenterItem.isEnabled = isStereoActive
-        menu.addItem(recenterItem)
-
-        // Glasses resolution
-        let glassesID = DisplayMirrorHelper.findXRealDisplay()
-        let glassesTitle: String
-        if let glassesID, let displayMode = CGDisplayCopyDisplayMode(glassesID) {
-            glassesTitle = "Glasses: \(displayMode.pixelWidth)x\(displayMode.pixelHeight)@\(Int(displayMode.refreshRate)) — Set Best Mode"
-        } else {
-            glassesTitle = "Glasses: display not found"
+        // Recenter (only while the stereo scene is running)
+        if isStereoActive {
+            let recenterItem = NSMenuItem(title: "Recenter View (Cmd+Shift+R)", action: #selector(recenter), keyEquivalent: "")
+            recenterItem.target = self
+            menu.addItem(recenterItem)
+            menu.addItem(NSMenuItem.separator())
         }
-        let glassesItem = NSMenuItem(title: glassesTitle, action: #selector(applyBestGlassesMode), keyEquivalent: "")
-        glassesItem.target = self
-        glassesItem.isEnabled = glassesID != nil
-        menu.addItem(glassesItem)
+
+        // Glasses display mode: current mode as info, plus a fix-it action when it is not the best one.
+        let glassesID = DisplayMirrorHelper.findXRealDisplay()
+        if let glassesID, let current = CGDisplayCopyDisplayMode(glassesID) {
+            let info = NSMenuItem(title: "Glasses: \(Self.describe(current))", action: nil, keyEquivalent: "")
+            info.isEnabled = false
+            menu.addItem(info)
+
+            if let best = DisplayMirrorHelper.bestMode(for: glassesID),
+               best.pixelWidth != current.pixelWidth || best.pixelHeight != current.pixelHeight || best.refreshRate != current.refreshRate {
+                let fixItem = NSMenuItem(title: "Switch Glasses to \(Self.describe(best))",
+                                         action: #selector(applyBestGlassesMode), keyEquivalent: "")
+                fixItem.target = self
+                menu.addItem(fixItem)
+            }
+        } else {
+            let info = NSMenuItem(title: "Glasses: not connected", action: nil, keyEquivalent: "")
+            info.isEnabled = false
+            menu.addItem(info)
+        }
 
         menu.addItem(NSMenuItem.separator())
 
@@ -160,7 +169,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } else if glassesDisconnectedNotice {
             statusLines.append("Glasses unplugged, modes stopped")
         } else if glassesID == nil {
-            statusLines.append("Tip: connect XReal Air via USB-C (\(imuAvailable ? "IMU detected" : "IMU not detected"))")
+            statusLines.append("Connect XReal Air via USB-C to enable the modes")
         }
         if !statusLines.isEmpty {
             for line in statusLines {
@@ -187,6 +196,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(quitItem)
 
         statusItem.menu = menu
+    }
+
+    private static func describe(_ mode: CGDisplayMode) -> String {
+        "\(mode.pixelWidth)×\(mode.pixelHeight) @ \(Int(mode.refreshRate)) Hz"
     }
 
     // MARK: - Mode switching
