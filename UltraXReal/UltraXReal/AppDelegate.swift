@@ -13,12 +13,12 @@ enum GlassesMode: Int {
         switch self {
         case .extraDisplay: return "Extended Display"
         case .mirror: return "Mirror Main Display"
-        case .chairs: return "Demo: 3D"
+        case .demo: return "Demo: 3D"
         case .cinema: return "Cinema…"
         }
     }
 
-    var usesStereo: Bool { self == .chairs }
+    var usesStereo: Bool { self == .demo }
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -64,7 +64,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // Launch arguments for development: `--stereo` starts the chairs, `--cinema <file>` the cinema.
         let args = CommandLine.arguments
         if args.contains("--stereo") {
-            switchTo(.chairs)
+            switchTo(.demo)
         } else if let index = args.firstIndex(of: "--cinema"), index + 1 < args.count {
             cinemaURL = URL(fileURLWithPath: args[index + 1])
             switchTo(.cinema, askForFile: false)
@@ -86,7 +86,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let menu = NSMenu()
         let imuAvailable = XRealIMUService.isDeviceAvailable()
 
-        for candidate in [GlassesMode.extraDisplay, .mirror, .cinema, .chairs] {
+        for candidate in [GlassesMode.extraDisplay, .mirror, .cinema, .demo] {
             var title = candidate.title
             if candidate == .cinema, mode == .cinema, let cinemaURL {
                 title = "Cinema: \(cinemaURL.lastPathComponent)"
@@ -227,7 +227,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             enableExtraDisplay()
         case .mirror:
             enableMirror()
-        case .chairs:
+        case .demo:
             enableStereo()
         case .cinema:
             guard let cinemaURL else { mode = .extraDisplay; break }
@@ -243,7 +243,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         switch mode {
         case .mirror:
             disableMirror()
-        case .chairs:
+        case .demo:
             disableStereo(waitForGlasses: exiting)
         case .cinema:
             disableCinema()
@@ -590,7 +590,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             symbol = "display"; color = nil
         case .mirror:
             symbol = "rectangle.on.rectangle"; color = .systemGreen
-        case .chairs:
+        case .demo:
             symbol = "cube"; color = .systemPurple
         case .cinema:
             symbol = "film"; color = .systemOrange
