@@ -475,6 +475,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         DispatchQueue.main.asyncAfter(deadline: .now() + 1.0) { [weak self] in
             guard let self else { return }
             DisplayMirrorHelper.applyBestMode(to: displayID)
+            self.glassesDisconnectedNotice = false
 
             // Glasses that were unplugged mid-stereo come back side-by-side; put them back to 2D.
             if !self.mode.usesStereo, self.stereoPreviousMode == nil, CGDisplayPixelsWide(displayID) >= 3000 {
@@ -515,10 +516,18 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let somethingActive = mode != .extraDisplay || stereoPreviousMode != nil || cinemaPlayer != nil
         guard somethingActive else {
             missedGlassesChecks = 0
+            if glassesDisconnectedNotice, XRealIMUService.isDeviceAvailable() {
+                glassesDisconnectedNotice = false
+                buildMenu()
+            }
             return
         }
         if XRealIMUService.isDeviceAvailable() {
             missedGlassesChecks = 0
+            if glassesDisconnectedNotice {
+                glassesDisconnectedNotice = false
+                buildMenu()
+            }
             return
         }
         missedGlassesChecks += 1
