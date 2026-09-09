@@ -5,6 +5,7 @@ import SwiftUI
 /// Left: the numbers in one column. Right: the road you are on, heading-up.
 struct HUDView: View {
     @ObservedObject private var model = HUDModel.shared
+    @ObservedObject private var route = RouteService.shared
     @State private var now = Date()
 
     private let tick = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
@@ -37,8 +38,8 @@ struct HUDView: View {
                     // Right: the road you are on
                     if model.showMap {
                         roadBlock(unit: unit)
-                            .frame(width: geometry.size.width * 0.46)
-                            .frame(maxHeight: .infinity)
+                            .frame(width: geometry.size.width * 0.46 * model.mapSize)
+                            .frame(height: (geometry.size.height - margin * 2) * model.mapSize, alignment: .top)
                     }
                 }
                 .padding(margin)
@@ -103,11 +104,16 @@ struct HUDView: View {
                 .rotationEffect(.degrees(model.relativeBearing ?? 0))
                 .opacity(model.relativeBearing == nil ? 0.3 : 1)
             VStack(alignment: .leading, spacing: 0) {
-                Text(model.distanceToTarget.map(Self.formatDistance) ?? "--")
+                Text((route.routeDistance ?? model.distanceToTarget).map(Self.formatDistance) ?? "--")
                     .font(.system(size: unit * 1.6, weight: .bold, design: .rounded))
-                Text("TARGET")
-                    .font(.system(size: unit * 0.7, weight: .medium, design: .rounded))
-                    .foregroundStyle(dimColor)
+                HStack(spacing: unit * 0.3) {
+                    Text(route.routeDistance != nil ? "ROUTE" : "TARGET")
+                    if let time = route.expectedTravelTime {
+                        Text("\(Int(time / 60)) min")
+                    }
+                }
+                .font(.system(size: unit * 0.7, weight: .medium, design: .rounded))
+                .foregroundStyle(dimColor)
             }
         }
     }
@@ -165,6 +171,7 @@ struct HUDView: View {
 private struct RoadCanvasView: View {
     @ObservedObject var model: HUDModel
     @ObservedObject private var roadData = RoadDataService.shared
+    @ObservedObject private var route = RouteService.shared
     let unit: CGFloat
     let color: Color
 
@@ -215,6 +222,18 @@ private struct RoadCanvasView: View {
                                style: StrokeStyle(lineWidth: isCurrent ? width * 1.4 : width, lineCap: .round, lineJoin: .round))
             }
 
+            // Route to the target: dashed, in the target colour
+            if route.polyline.count >= 2 {
+                var path = Path()
+                for (i, c) in route.polyline.enumerated() {
+                    let p = project(c)
+                    if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                }
+                context.stroke(path, with: .color(.orange.opacity(0.9)),
+                               style: StrokeStyle(lineWidth: unit * 0.22, lineCap: .round, lineJoin: .round,
+                                                  dash: [unit * 0.55, unit * 0.45]))
+            }
+
             // You: a small arrow pointing up
             var arrow = Path()
             let a = unit * 0.45
@@ -234,10 +253,17 @@ private struct RoadCanvasView: View {
             }
         }
         .onChange(of: model.location) { _, location in
-            if let location { roadData.update(for: location) }
+            guard let location else { return }
+            roadData.update(for: location)
+            route.update(location: location, target: model.target)
+        }
+        .onChange(of: model.target) { _, target in
+            if let location = model.location { route.update(location: location, target: target) }
         }
         .onAppear {
-            if let location = model.location { roadData.update(for: location) }
+            guard let location = model.location else { return }
+            roadData.update(for: location)
+            route.update(location: location, target: model.target)
         }
     }
 }

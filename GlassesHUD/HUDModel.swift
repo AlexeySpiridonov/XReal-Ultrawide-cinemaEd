@@ -55,7 +55,8 @@ final class HUDModel: ObservableObject {
     @AppStorage("showCoordinates") var showCoordinates = false
     @AppStorage("showClock") var showClock = true
     @AppStorage("showMap") var showMap = true
-    @AppStorage("mapAhead") var mapAhead: Double = 150   // metres of road visible ahead of you
+    @AppStorage("mapAhead") var mapAhead: Double = 100   // metres of road visible ahead of you
+    @AppStorage("mapSize") var mapSize: Double = 0.7      // size of the roads panel, 1.0 = full height
     @AppStorage("dimPhoneScreen") var dimPhoneScreen = true
     @AppStorage("speedUnit") var speedUnit: SpeedUnit = .kmh
     @AppStorage("headingSource") var headingSource: HeadingSource = .auto

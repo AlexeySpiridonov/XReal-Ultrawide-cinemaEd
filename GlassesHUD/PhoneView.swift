@@ -5,6 +5,7 @@ import SwiftUI
 /// The phone side: status, HUD preview, what to show, target on a map.
 struct PhoneView: View {
     @ObservedObject private var model = HUDModel.shared
+    @ObservedObject private var route = RouteService.shared
     @State private var cameraPosition: MapCameraPosition = .userLocation(fallback: .automatic)
 
     var body: some View {
@@ -48,6 +49,10 @@ struct PhoneView: View {
                             Text("300 m").tag(300.0)
                             Text("500 m").tag(500.0)
                         }
+                        VStack(alignment: .leading) {
+                            Text("Roads panel size: \(Int(model.mapSize * 100))%")
+                            Slider(value: $model.mapSize, in: 0.4...1.0, step: 0.05)
+                        }
                     }
                 }
 
@@ -70,6 +75,9 @@ struct PhoneView: View {
                         .listRowInsets(EdgeInsets())
                     if let target = model.target {
                         LabeledContent("Target", value: String(format: "%.5f, %.5f", target.latitude, target.longitude))
+                        if let distance = route.routeDistance, let time = route.expectedTravelTime {
+                            LabeledContent("Route", value: "\(HUDView.formatDistance(distance)), \(Int(time / 60)) min")
+                        }
                         Button("Clear target", role: .destructive) { model.target = nil }
                     }
                 } header: {
@@ -97,6 +105,10 @@ struct PhoneView: View {
                 if let target = model.target {
                     Marker("Target", systemImage: "flag.fill", coordinate: target)
                         .tint(.orange)
+                }
+                if route.polyline.count >= 2 {
+                    MapPolyline(coordinates: route.polyline)
+                        .stroke(.orange, style: StrokeStyle(lineWidth: 4, dash: [8, 6]))
                 }
             }
             .mapControls {
