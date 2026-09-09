@@ -26,9 +26,9 @@ enum HeadingSource: String, CaseIterable, Identifiable {
     var id: String { rawValue }
     var label: String {
         switch self {
-        case .auto: return "Auto (GPS when moving)"
-        case .compass: return "Compass"
-        case .gps: return "GPS course"
+        case .auto: return "Auto (GPS + gyro, compass at rest)"
+        case .compass: return "Compass + gyro"
+        case .gps: return "GPS course + gyro"
         }
     }
 }
@@ -85,15 +85,11 @@ final class HUDModel: ObservableObject {
 
     var isMoving: Bool { (speed ?? 0) > 1.0 }
 
-    /// Heading in degrees true north, nil when unknown.
+    /// Heading in degrees true north (GPS course fused with the gyroscope), nil when unknown.
     var heading: Double? {
-        let gps: Double? = (location?.course ?? -1) >= 0 ? location?.course : nil
+        if let fused = NavState.shared.heading { return fused }
         let compass: Double? = (compassHeading?.trueHeading ?? -1) >= 0 ? compassHeading?.trueHeading : nil
-        switch headingSource {
-        case .gps: return gps
-        case .compass: return compass ?? gps
-        case .auto: return isMoving ? (gps ?? compass) : (compass ?? gps)
-        }
+        return compass
     }
 
     var distanceToTarget: CLLocationDistance? {

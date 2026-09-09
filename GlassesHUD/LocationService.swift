@@ -34,6 +34,7 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     }
 
     private func beginUpdates() {
+        Task { @MainActor in NavState.shared.start() }
         manager.allowsBackgroundLocationUpdates = true
         manager.showsBackgroundLocationIndicator = true
         manager.startUpdatingLocation()
@@ -54,7 +55,11 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
 
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let last = locations.last else { return }
-        Task { @MainActor in HUDModel.shared.location = last }
+        Task { @MainActor in
+            let model = HUDModel.shared
+            NavState.shared.ingest(location: last, compass: model.compassHeading, source: model.headingSource)
+            model.location = last
+        }
         updateRoadName(for: last)
     }
 

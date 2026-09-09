@@ -20,6 +20,7 @@ struct PhoneView: View {
                     if let road = model.roadName {
                         LabeledContent("Road", value: road)
                     }
+                    LabeledContent("Heading", value: NavState.shared.headingSource)
                     Toggle("Dim phone screen while glasses are connected", isOn: $model.dimPhoneScreen)
                         .onChange(of: model.dimPhoneScreen) { _, _ in
                             if model.glassesConnected { GlassesSceneDelegate.keepPhoneAwake(true) }

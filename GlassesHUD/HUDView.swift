@@ -73,6 +73,12 @@ struct HUDView: View {
     }
 
     private func headingBlock(unit: CGFloat) -> some View {
+        TimelineView(.periodic(from: .now, by: 0.1)) { _ in
+            headingReadout(unit: unit)
+        }
+    }
+
+    private func headingReadout(unit: CGFloat) -> some View {
         HStack(alignment: .lastTextBaseline, spacing: unit * 0.3) {
             if let heading = model.heading {
                 Text(String(format: "%03.0f°", heading))
@@ -176,10 +182,29 @@ private struct RoadCanvasView: View {
     let color: Color
 
     var body: some View {
-        Canvas { context, size in
+        TimelineView(.animation) { timeline in
+            canvas(at: timeline.date)
+        }
+        .onChange(of: model.location) { _, location in
+            guard let location else { return }
+            roadData.update(for: location)
+            route.update(location: location, target: model.target)
+        }
+        .onChange(of: model.target) { _, target in
+            if let location = model.location { route.update(location: location, target: target) }
+        }
+        .onAppear {
             guard let location = model.location else { return }
+            roadData.update(for: location)
+            route.update(location: location, target: model.target)
+        }
+    }
+
+    /// Redrawn every frame: position dead-reckoned and heading gyro-smoothed between GPS fixes.
+    private func canvas(at date: Date) -> some View {
+        Canvas { context, size in
+            guard let origin = NavState.shared.coordinate(at: date) else { return }
             let heading = (model.heading ?? 0) * .pi / 180
-            let origin = location.coordinate
             let metresPerDegreeLat = 111_320.0
             let metresPerDegreeLon = 111_320.0 * cos(origin.latitude * .pi / 180)
 
@@ -251,19 +276,6 @@ private struct RoadCanvasView: View {
                     .foregroundStyle(color.opacity(0.6))
                     .padding(unit * 0.3)
             }
-        }
-        .onChange(of: model.location) { _, location in
-            guard let location else { return }
-            roadData.update(for: location)
-            route.update(location: location, target: model.target)
-        }
-        .onChange(of: model.target) { _, target in
-            if let location = model.location { route.update(location: location, target: target) }
-        }
-        .onAppear {
-            guard let location = model.location else { return }
-            roadData.update(for: location)
-            route.update(location: location, target: model.target)
         }
     }
 }
