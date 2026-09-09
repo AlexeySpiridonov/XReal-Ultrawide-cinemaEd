@@ -10,12 +10,23 @@ struct PhoneView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("Status") {
+                Section {
                     LabeledContent("Glasses", value: model.glassesConnected ? "Connected" : "Not connected")
                     LabeledContent("Location", value: authorizationText)
                     if let location = model.location {
                         LabeledContent("GPS accuracy", value: "±\(Int(location.horizontalAccuracy)) m")
                     }
+                    if let road = model.roadName {
+                        LabeledContent("Road", value: road)
+                    }
+                    Toggle("Dim phone screen while glasses are connected", isOn: $model.dimPhoneScreen)
+                        .onChange(of: model.dimPhoneScreen) { _, _ in
+                            if model.glassesConnected { GlassesSceneDelegate.keepPhoneAwake(true) }
+                        }
+                } header: {
+                    Text("Status")
+                } footer: {
+                    Text("Do not lock the phone: iOS freezes the glasses' display while the phone is locked. The app keeps the phone awake and dims its screen instead; tap the screen to see it.")
                 }
 
                 Section("HUD preview") {
@@ -29,6 +40,15 @@ struct PhoneView: View {
                     Toggle("Target distance and arrow", isOn: $model.showTarget)
                     Toggle("Coordinates", isOn: $model.showCoordinates)
                     Toggle("Clock and GPS accuracy", isOn: $model.showClock)
+                    Toggle("Roads on the right", isOn: $model.showMap)
+                    if model.showMap {
+                        Picker("Road ahead", selection: $model.mapAhead) {
+                            Text("100 m").tag(100.0)
+                            Text("150 m").tag(150.0)
+                            Text("300 m").tag(300.0)
+                            Text("500 m").tag(500.0)
+                        }
+                    }
                 }
 
                 Section("Units and sources") {

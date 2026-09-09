@@ -2,6 +2,7 @@ import CoreLocation
 import SwiftUI
 
 /// What the glasses show. Black is transparent in the glasses, so everything sits on black.
+/// Left: the numbers in one column. Right: the road you are on, heading-up.
 struct HUDView: View {
     @ObservedObject private var model = HUDModel.shared
     @State private var now = Date()
@@ -18,22 +19,26 @@ struct HUDView: View {
             ZStack {
                 Color.black
 
-                // Top row: speed, heading, clock
-                VStack {
-                    HStack(alignment: .top) {
+                HStack(alignment: .top, spacing: margin) {
+                    // Left column: all the readouts
+                    VStack(alignment: .leading, spacing: unit * 0.9) {
                         if model.showSpeed { speedBlock(unit: unit) }
-                        Spacer()
                         if model.showHeading { headingBlock(unit: unit) }
-                        Spacer()
+                        if model.showAltitude { altitudeBlock(unit: unit) }
+                        if model.showTarget, model.target != nil { targetBlock(unit: unit) }
+                        if model.showCoordinates { coordinatesBlock(unit: unit) }
+                        Spacer(minLength: 0)
                         if model.showClock { clockBlock(unit: unit) }
                     }
-                    Spacer()
-                    HStack(alignment: .bottom) {
-                        if model.showAltitude { altitudeBlock(unit: unit) }
-                        Spacer()
-                        if model.showCoordinates { coordinatesBlock(unit: unit) }
-                        Spacer()
-                        if model.showTarget { targetBlock(unit: unit) }
+                    .frame(maxHeight: .infinity, alignment: .top)
+
+                    Spacer(minLength: 0)
+
+                    // Right: the road you are on
+                    if model.showMap {
+                        roadBlock(unit: unit)
+                            .frame(width: geometry.size.width * 0.46)
+                            .frame(maxHeight: .infinity)
                     }
                 }
                 .padding(margin)
@@ -53,10 +58,10 @@ struct HUDView: View {
         .onReceive(tick) { now = $0 }
     }
 
-    // MARK: - Blocks
+    // MARK: - Readouts
 
     private func speedBlock(unit: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        HStack(alignment: .lastTextBaseline, spacing: unit * 0.3) {
             let value = model.speed.map { model.speedUnit.convert($0) }
             Text(value.map { String(format: "%.0f", $0) } ?? "--")
                 .font(.system(size: unit * 3.2, weight: .bold, design: .rounded))
@@ -67,7 +72,7 @@ struct HUDView: View {
     }
 
     private func headingBlock(unit: CGFloat) -> some View {
-        VStack(spacing: unit * 0.1) {
+        HStack(alignment: .lastTextBaseline, spacing: unit * 0.3) {
             if let heading = model.heading {
                 Text(String(format: "%03.0f°", heading))
                     .font(.system(size: unit * 2.0, weight: .bold, design: .rounded))
@@ -81,20 +86,8 @@ struct HUDView: View {
         }
     }
 
-    private func clockBlock(unit: CGFloat) -> some View {
-        VStack(alignment: .trailing, spacing: 0) {
-            Text(now, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
-                .font(.system(size: unit * 1.6, weight: .semibold, design: .rounded))
-            if let accuracy = model.location?.horizontalAccuracy, accuracy >= 0 {
-                Text("GPS ±\(Int(accuracy)) m")
-                    .font(.system(size: unit * 0.7, weight: .medium, design: .rounded))
-                    .foregroundStyle(dimColor)
-            }
-        }
-    }
-
     private func altitudeBlock(unit: CGFloat) -> some View {
-        VStack(alignment: .leading, spacing: 0) {
+        HStack(alignment: .lastTextBaseline, spacing: unit * 0.3) {
             Text(model.location.map { String(format: "%.0f m", $0.altitude) } ?? "-- m")
                 .font(.system(size: unit * 1.6, weight: .semibold, design: .rounded))
             Text("ALT")
@@ -103,8 +96,24 @@ struct HUDView: View {
         }
     }
 
+    private func targetBlock(unit: CGFloat) -> some View {
+        HStack(alignment: .center, spacing: unit * 0.5) {
+            Image(systemName: "location.north.fill")
+                .font(.system(size: unit * 2.0, weight: .bold))
+                .rotationEffect(.degrees(model.relativeBearing ?? 0))
+                .opacity(model.relativeBearing == nil ? 0.3 : 1)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(model.distanceToTarget.map(Self.formatDistance) ?? "--")
+                    .font(.system(size: unit * 1.6, weight: .bold, design: .rounded))
+                Text("TARGET")
+                    .font(.system(size: unit * 0.7, weight: .medium, design: .rounded))
+                    .foregroundStyle(dimColor)
+            }
+        }
+    }
+
     private func coordinatesBlock(unit: CGFloat) -> some View {
-        VStack(spacing: 0) {
+        Group {
             if let c = model.location?.coordinate {
                 Text(String(format: "%.5f  %.5f", c.latitude, c.longitude))
                     .font(.system(size: unit * 0.8, weight: .medium, design: .rounded))
@@ -113,21 +122,29 @@ struct HUDView: View {
         }
     }
 
-    private func targetBlock(unit: CGFloat) -> some View {
-        HStack(alignment: .center, spacing: unit * 0.5) {
-            if model.target != nil {
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(model.distanceToTarget.map(Self.formatDistance) ?? "--")
-                        .font(.system(size: unit * 1.8, weight: .bold, design: .rounded))
-                    Text("TARGET")
-                        .font(.system(size: unit * 0.7, weight: .medium, design: .rounded))
-                        .foregroundStyle(dimColor)
-                }
-                Image(systemName: "location.north.fill")
-                    .font(.system(size: unit * 2.4, weight: .bold))
-                    .rotationEffect(.degrees(model.relativeBearing ?? 0))
-                    .opacity(model.relativeBearing == nil ? 0.3 : 1)
+    private func clockBlock(unit: CGFloat) -> some View {
+        HStack(alignment: .lastTextBaseline, spacing: unit * 0.4) {
+            Text(now, format: .dateTime.hour(.twoDigits(amPM: .omitted)).minute(.twoDigits))
+                .font(.system(size: unit * 1.4, weight: .semibold, design: .rounded))
+            if let accuracy = model.location?.horizontalAccuracy, accuracy >= 0 {
+                Text("GPS ±\(Int(accuracy)) m")
+                    .font(.system(size: unit * 0.7, weight: .medium, design: .rounded))
+                    .foregroundStyle(dimColor)
             }
+        }
+    }
+
+    // MARK: - Road map
+
+    private func roadBlock(unit: CGFloat) -> some View {
+        VStack(alignment: .trailing, spacing: unit * 0.3) {
+            Text(model.roadName ?? "—")
+                .font(.system(size: unit * 1.3, weight: .semibold, design: .rounded))
+                .lineLimit(1)
+                .minimumScaleFactor(0.5)
+            RoadCanvasView(model: model, unit: unit, color: hudColor)
+                .clipShape(RoundedRectangle(cornerRadius: unit * 0.4))
+                .overlay(RoundedRectangle(cornerRadius: unit * 0.4).stroke(dimColor.opacity(0.4), lineWidth: unit * 0.04))
         }
     }
 
@@ -141,6 +158,87 @@ struct HUDView: View {
 
     static func formatDistance(_ meters: CLLocationDistance) -> String {
         meters < 1000 ? String(format: "%.0f m", meters) : String(format: "%.1f km", meters / 1000)
+    }
+}
+
+/// Roads only, on black: OpenStreetMap road lines around you, heading-up, you near the bottom.
+private struct RoadCanvasView: View {
+    @ObservedObject var model: HUDModel
+    @ObservedObject private var roadData = RoadDataService.shared
+    let unit: CGFloat
+    let color: Color
+
+    var body: some View {
+        Canvas { context, size in
+            guard let location = model.location else { return }
+            let heading = (model.heading ?? 0) * .pi / 180
+            let origin = location.coordinate
+            let metresPerDegreeLat = 111_320.0
+            let metresPerDegreeLon = 111_320.0 * cos(origin.latitude * .pi / 180)
+
+            // You are 80% down the map; `mapAhead` metres fit above you.
+            let scale = size.height / CGFloat(model.mapAhead * 1.25)
+            let you = CGPoint(x: size.width / 2, y: size.height * 0.8)
+            let sinH = sin(heading), cosH = cos(heading)
+
+            func project(_ c: CLLocationCoordinate2D) -> CGPoint {
+                let east = (c.longitude - origin.longitude) * metresPerDegreeLon
+                let north = (c.latitude - origin.latitude) * metresPerDegreeLat
+                let forward = east * sinH + north * cosH
+                let right = east * cosH - north * sinH
+                return CGPoint(x: you.x + CGFloat(right) * scale, y: you.y - CGFloat(forward) * scale)
+            }
+
+            let bounds = CGRect(origin: .zero, size: size).insetBy(dx: -size.width, dy: -size.height)
+            for road in roadData.roads {
+                var path = Path()
+                var visible = false
+                for (i, c) in road.points.enumerated() {
+                    let p = project(c)
+                    if bounds.contains(p) { visible = true }
+                    if i == 0 { path.move(to: p) } else { path.addLine(to: p) }
+                }
+                guard visible else { continue }
+
+                let isCurrent = road.name != nil && road.name == model.roadName
+                let width: CGFloat
+                let opacity: Double
+                switch road.kind {
+                case .motorway: width = unit * 0.40; opacity = 1.0
+                case .primary: width = unit * 0.32; opacity = 0.95
+                case .secondary: width = unit * 0.26; opacity = 0.85
+                case .tertiary: width = unit * 0.20; opacity = 0.75
+                case .residential: width = unit * 0.14; opacity = 0.6
+                case .service: width = unit * 0.08; opacity = 0.4
+                }
+                context.stroke(path, with: .color(color.opacity(isCurrent ? 1.0 : opacity)),
+                               style: StrokeStyle(lineWidth: isCurrent ? width * 1.4 : width, lineCap: .round, lineJoin: .round))
+            }
+
+            // You: a small arrow pointing up
+            var arrow = Path()
+            let a = unit * 0.45
+            arrow.move(to: CGPoint(x: you.x, y: you.y - a))
+            arrow.addLine(to: CGPoint(x: you.x + a * 0.6, y: you.y + a * 0.7))
+            arrow.addLine(to: CGPoint(x: you.x, y: you.y + a * 0.3))
+            arrow.addLine(to: CGPoint(x: you.x - a * 0.6, y: you.y + a * 0.7))
+            arrow.closeSubpath()
+            context.fill(arrow, with: .color(.orange))
+        }
+        .overlay(alignment: .bottomLeading) {
+            if roadData.roads.isEmpty {
+                Text(roadData.isLoading ? "loading roads…" : (roadData.lastError ?? "no road data"))
+                    .font(.system(size: unit * 0.6, design: .rounded))
+                    .foregroundStyle(color.opacity(0.6))
+                    .padding(unit * 0.3)
+            }
+        }
+        .onChange(of: model.location) { _, location in
+            if let location { roadData.update(for: location) }
+        }
+        .onAppear {
+            if let location = model.location { roadData.update(for: location) }
+        }
     }
 }
 

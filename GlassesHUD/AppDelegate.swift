@@ -38,8 +38,12 @@ final class PhoneSceneDelegate: UIResponder, UIWindowSceneDelegate {
 }
 
 /// The glasses (external display): the HUD only.
+///
+/// iOS freezes external-display scenes while the phone is locked, so while the glasses are
+/// connected the app keeps the phone awake and turns its screen brightness down to zero instead.
 final class GlassesSceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
+    private static var savedBrightness: CGFloat?
 
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
@@ -50,13 +54,35 @@ final class GlassesSceneDelegate: UIResponder, UIWindowSceneDelegate {
         window.isHidden = false
         self.window = window
         HUDModel.shared.glassesConnected = true
-        UIApplication.shared.isIdleTimerDisabled = true
+        Self.keepPhoneAwake(true)
     }
 
     func sceneDidDisconnect(_ scene: UIScene) {
         HUDModel.shared.glassesConnected = false
-        UIApplication.shared.isIdleTimerDisabled = false
+        Self.keepPhoneAwake(false)
         window = nil
+    }
+
+    static func keepPhoneAwake(_ awake: Bool) {
+        UIApplication.shared.isIdleTimerDisabled = awake
+        guard let phoneScreen = phoneScreen() else { return }
+        if awake {
+            if HUDModel.shared.dimPhoneScreen {
+                if savedBrightness == nil { savedBrightness = phoneScreen.brightness }
+                phoneScreen.brightness = 0
+            }
+        } else if let saved = savedBrightness {
+            phoneScreen.brightness = saved
+            savedBrightness = nil
+        }
+    }
+
+    /// The phone's own screen (not the external one).
+    private static func phoneScreen() -> UIScreen? {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first { $0.session.role == .windowApplication }?
+            .screen
     }
 }
 

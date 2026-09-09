@@ -8,6 +8,9 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     static let shared = LocationService()
 
     private let manager = CLLocationManager()
+    private let geocoder = CLGeocoder()
+    private var lastGeocodedLocation: CLLocation?
+    private var lastGeocodeTime = Date.distantPast
 
     private override init() {
         super.init()
@@ -52,6 +55,24 @@ final class LocationService: NSObject, CLLocationManagerDelegate {
     func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
         guard let last = locations.last else { return }
         Task { @MainActor in HUDModel.shared.location = last }
+        updateRoadName(for: last)
+    }
+
+    /// Reverse geocodes at most every 100 m / 10 s (Apple rate-limits the geocoder).
+    private func updateRoadName(for location: CLLocation) {
+        let moved = lastGeocodedLocation.map { location.distance(from: $0) } ?? .infinity
+        guard moved > 100, Date().timeIntervalSince(lastGeocodeTime) > 10, !geocoder.isGeocoding else { return }
+        lastGeocodedLocation = location
+        lastGeocodeTime = Date()
+        geocoder.reverseGeocodeLocation(location) { placemarks, error in
+            guard let placemark = placemarks?.first else {
+                if let error { print("[Geocoder] \(error.localizedDescription)") }
+                return
+            }
+            // Only a street name; a nearby landmark would be misleading. Keep the last street otherwise.
+            guard let street = placemark.thoroughfare else { return }
+            Task { @MainActor in HUDModel.shared.roadName = street }
+        }
     }
 
     func locationManager(_ manager: CLLocationManager, didUpdateHeading newHeading: CLHeading) {

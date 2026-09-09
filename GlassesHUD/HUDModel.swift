@@ -44,6 +44,8 @@ final class HUDModel: ObservableObject {
     @Published var compassHeading: CLHeading?
     @Published var authorization: CLAuthorizationStatus = .notDetermined
     @Published var glassesConnected = false
+    /// Name of the road at the current position (reverse geocoded, updated every ~100 m).
+    @Published var roadName: String?
 
     // Settings (persisted)
     @AppStorage("showSpeed") var showSpeed = true
@@ -52,6 +54,9 @@ final class HUDModel: ObservableObject {
     @AppStorage("showTarget") var showTarget = true
     @AppStorage("showCoordinates") var showCoordinates = false
     @AppStorage("showClock") var showClock = true
+    @AppStorage("showMap") var showMap = true
+    @AppStorage("mapAhead") var mapAhead: Double = 150   // metres of road visible ahead of you
+    @AppStorage("dimPhoneScreen") var dimPhoneScreen = true
     @AppStorage("speedUnit") var speedUnit: SpeedUnit = .kmh
     @AppStorage("headingSource") var headingSource: HeadingSource = .auto
     @AppStorage("hudScale") var hudScale: Double = 1.0
