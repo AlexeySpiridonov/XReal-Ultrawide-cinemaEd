@@ -1,0 +1,831 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>XReal Workbench — открытые программы для очков XReal Air</title>
+<meta name="description" content="Две открытые программы для очков XReal Air 2 Pro: кинотеатр и стереорежим на macOS, навигационный дисплей на iPhone. Переключение панели очков в 3D по USB HID, отслеживание головы, дороги и маршрут поверх реального мира.">
+<meta name="theme-color" content="#E8ECEC" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0C1113" media="(prefers-color-scheme: dark)">
+<link rel="canonical" href="https://alexeyspiridonov.github.io/XReal-Ultrawide-cinemaEd/">
+
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="XReal Workbench">
+<meta property="og:title" content="XReal Workbench — чёрный это прозрачный">
+<meta property="og:description" content="Две открытые программы для очков XReal Air: кинотеатр и стерео на macOS, GPS-дисплей на iPhone.">
+<meta property="og:url" content="https://alexeyspiridonov.github.io/XReal-Ultrawide-cinemaEd/">
+<meta property="og:locale" content="ru_RU">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="XReal Workbench — чёрный это прозрачный">
+<meta name="twitter:description" content="Две открытые программы для очков XReal Air: кинотеатр и стерео на macOS, GPS-дисплей на iPhone.">
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%23050708'/><rect x='4' y='11' width='11' height='10' rx='2.5' fill='%237DF3B4'/><rect x='17' y='11' width='11' height='10' rx='2.5' fill='%237DF3B4' opacity='.5'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Newsreader:opsz,wght@6..72,300;6..72,400;6..72,500&display=swap">
+
+<style>
+html { -webkit-text-size-adjust: 100%; }
+img, svg { max-width: 100%; }
+[hidden] { display: none !important; }
+
+:root {
+  color-scheme: light;
+
+  --ground:      #E8ECEC;
+  --ground-sunk: #DCE3E3;
+  --card:        #F3F6F5;
+  --ink:         #11171A;
+  --ink-2:       #4C5A5E;
+  --ink-3:       #77868A;
+  --rule:        #C6D0D0;
+  --rule-soft:   #D7DEDE;
+  --accent:      #175C6B;
+  --accent-soft: #3E8B95;
+
+  /* Display colours — identical in both themes: a screen is a screen. */
+  --screen:      #050708;
+  --screen-edge: #262E30;
+  --phosphor:    #7DF3B4;
+  --route:       #FF8A3D;
+
+  --f-display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --f-body:    "Newsreader", Georgia, "Times New Roman", serif;
+  --f-mono:    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+  --gut: clamp(18px, 5vw, 56px);
+  --max: 1080px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    color-scheme: dark;
+    --ground:      #0C1113;
+    --ground-sunk: #080C0E;
+    --card:        #151D20;
+    --ink:         #E6ECEB;
+    --ink-2:       #9FB0B2;
+    --ink-3:       #6E7F82;
+    --rule:        #263235;
+    --rule-soft:   #1B2426;
+    --accent:      #63CFC4;
+    --accent-soft: #8FE0D7;
+  }
+}
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --ground:      #0C1113;
+  --ground-sunk: #080C0E;
+  --card:        #151D20;
+  --ink:         #E6ECEB;
+  --ink-2:       #9FB0B2;
+  --ink-3:       #6E7F82;
+  --rule:        #263235;
+  --rule-soft:   #1B2426;
+  --accent:      #63CFC4;
+  --accent-soft: #8FE0D7;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: var(--f-body);
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+
+.wrap {
+  max-width: var(--max);
+  margin: 0 auto;
+  padding-inline: var(--gut);
+}
+
+/* ---------- type ---------- */
+
+h1, h2, h3, .eyebrow, .mono, .btn { font-family: var(--f-display); }
+
+h1 {
+  font-size: clamp(40px, 8.5vw, 82px);
+  line-height: .96;
+  letter-spacing: -.028em;
+  font-weight: 800;
+  margin: 0;
+  text-wrap: balance;
+}
+h2 {
+  font-size: clamp(26px, 4.2vw, 40px);
+  line-height: 1.05;
+  letter-spacing: -.02em;
+  font-weight: 700;
+  margin: 0;
+  text-wrap: balance;
+}
+h3 {
+  font-size: 20px;
+  line-height: 1.2;
+  letter-spacing: -.01em;
+  font-weight: 700;
+  margin: 0;
+}
+p { margin: 0; }
+.lede {
+  font-size: clamp(18px, 2.3vw, 22px);
+  line-height: 1.5;
+  color: var(--ink-2);
+  font-weight: 300;
+  max-width: 34em;
+}
+.prose { max-width: 36em; color: var(--ink-2); }
+
+.eyebrow {
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+code {
+  font-family: var(--f-mono);
+  font-size: .86em;
+  background: var(--ground-sunk);
+  border: 1px solid var(--rule-soft);
+  border-radius: 3px;
+  padding: .08em .34em;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+a { color: var(--accent); text-decoration-thickness: 1px; text-underline-offset: 3px; }
+a:focus-visible, .btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 2px; }
+
+/* ---------- rhythm ---------- */
+
+section { padding-block: clamp(52px, 8vw, 96px); }
+.sep { border-top: 1px solid var(--rule); }
+
+.head { display: grid; gap: 14px; margin-bottom: clamp(28px, 4vw, 44px); }
+
+/* ---------- hero ---------- */
+
+.hero { padding-block: clamp(40px, 7vw, 76px) clamp(34px, 5vw, 56px); }
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 22px;
+  align-items: baseline;
+  padding-block: 22px;
+  border-bottom: 1px solid var(--rule);
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: .14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+}
+.topbar b { color: var(--ink); font-weight: 700; letter-spacing: .1em; }
+.topbar .spacer { flex: 1 1 auto; }
+
+.hero-grid { display: grid; gap: clamp(22px, 3.4vw, 34px); margin-top: clamp(26px, 4vw, 40px); }
+.hero-sub { display: grid; gap: 22px; align-items: start; }
+@media (min-width: 760px) {
+  .hero-sub { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 40px; }
+}
+
+.stamp {
+  display: grid;
+  gap: 8px;
+  padding: 16px 18px;
+  border: 1px solid var(--rule);
+  background: var(--card);
+  font-family: var(--f-mono);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--ink-2);
+}
+.stamp .row { display: flex; justify-content: space-between; gap: 16px; }
+.stamp .row span:last-child { color: var(--ink); font-weight: 500; text-align: right; }
+
+/* ---------- figures / screens ---------- */
+
+figure { margin: 0; }
+
+.fig-head {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  align-items: baseline;
+  margin-bottom: 12px;
+  font-family: var(--f-mono);
+  font-size: 11.5px;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+}
+.fig-head .n { color: var(--accent); font-weight: 700; }
+.fig-head .t { color: var(--ink-3); }
+
+.screen {
+  background: var(--screen);
+  border: 1px solid var(--screen-edge);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+  box-shadow: 0 1px 0 rgba(255,255,255,.28) inset;
+}
+.screen svg { display: block; width: 100%; height: auto; }
+
+figcaption {
+  margin-top: 12px;
+  font-family: var(--f-mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--ink-3);
+  max-width: 62ch;
+}
+figcaption b { color: var(--ink-2); font-weight: 500; }
+
+/* ---------- eye split ---------- */
+
+.eyes { display: grid; grid-template-columns: 1fr 1fr; gap: 1px; background: var(--screen-edge); }
+.eye { background: var(--screen); position: relative; }
+.eye-tag {
+  position: absolute; top: 8px; left: 10px;
+  font-family: var(--f-mono); font-size: 10px; letter-spacing: .18em;
+  color: rgba(255,255,255,.42);
+}
+.eye:last-child .eye-tag { left: auto; right: 10px; }
+
+/* ---------- two apps ---------- */
+
+.apps { display: grid; gap: 1px; background: var(--rule); border: 1px solid var(--rule); }
+@media (min-width: 800px) { .apps { grid-template-columns: 1fr 1fr; } }
+.app {
+  background: var(--card);
+  padding: clamp(22px, 3vw, 32px);
+  display: grid;
+  gap: 14px;
+  align-content: start;
+}
+.app .plat {
+  font-family: var(--f-mono); font-size: 11px; letter-spacing: .16em;
+  text-transform: uppercase; color: var(--accent);
+}
+.app ul { margin: 0; padding-left: 1.05em; display: grid; gap: 7px; color: var(--ink-2); font-size: 16px; }
+.app li::marker { color: var(--accent-soft); }
+
+/* ---------- modes ---------- */
+
+.modes { border-top: 1px solid var(--rule); }
+.mode {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 4px 20px;
+  padding-block: 20px;
+  border-bottom: 1px solid var(--rule-soft);
+  align-items: baseline;
+}
+@media (min-width: 720px) {
+  .mode { grid-template-columns: 78px minmax(0, 16em) minmax(0, 1fr); gap: 24px; padding-block: 22px; }
+}
+.mode .key {
+  font-family: var(--f-mono); font-size: 13px; font-weight: 500;
+  color: var(--accent); letter-spacing: .06em;
+}
+.mode .name { font-family: var(--f-display); font-weight: 700; font-size: 19px; letter-spacing: -.01em; }
+.mode .what { color: var(--ink-2); font-size: 16px; grid-column: 1 / -1; }
+@media (min-width: 720px) { .mode .what { grid-column: auto; } }
+
+/* ---------- specs ---------- */
+
+.specs {
+  display: grid;
+  gap: 1px;
+  background: var(--rule);
+  border: 1px solid var(--rule);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 640px) { .specs { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .specs { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+.spec { background: var(--card); padding: 18px 16px 16px; display: grid; gap: 4px; align-content: start; }
+.spec .v {
+  font-family: var(--f-display); font-weight: 700;
+  font-size: clamp(21px, 2.7vw, 27px); letter-spacing: -.02em;
+  font-variant-numeric: tabular-nums; line-height: 1.05;
+}
+.spec .v small { font-size: .55em; font-weight: 600; color: var(--ink-3); letter-spacing: 0; }
+.spec .l {
+  font-family: var(--f-mono); font-size: 10.5px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); line-height: 1.45;
+}
+
+/* ---------- how ---------- */
+
+.how { display: grid; gap: clamp(26px, 3.4vw, 40px); }
+@media (min-width: 820px) { .how { grid-template-columns: 1fr 1fr; gap: 44px 56px; } }
+.how article { display: grid; gap: 10px; align-content: start; }
+.how h3 { display: flex; gap: 10px; align-items: baseline; }
+.how h3 .tag {
+  font-family: var(--f-mono); font-size: 11px; font-weight: 500;
+  letter-spacing: .12em; color: var(--accent); text-transform: uppercase;
+}
+
+/* ---------- limits ---------- */
+
+.limits { display: grid; gap: 12px; max-width: 46em; }
+.limit {
+  display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 14px;
+  padding: 14px 16px; background: var(--card); border: 1px solid var(--rule);
+  color: var(--ink-2); font-size: 16px;
+}
+.limit .m {
+  font-family: var(--f-mono); font-size: 11px; letter-spacing: .1em;
+  text-transform: uppercase; color: var(--ink-3); padding-top: .32em;
+}
+
+/* ---------- footer ---------- */
+
+.foot { padding-block: clamp(44px, 6vw, 72px) 56px; border-top: 1px solid var(--rule); }
+.btnrow { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 8px; }
+.btn {
+  display: inline-flex; align-items: center; gap: 10px;
+  padding: 12px 20px; border: 1px solid var(--ink); border-radius: 2px;
+  background: var(--ink); color: var(--ground);
+  font-weight: 600; font-size: 15px; letter-spacing: -.005em;
+  text-decoration: none;
+}
+.btn.ghost { background: transparent; color: var(--ink); border-color: var(--rule); }
+.btn .arrow { font-family: var(--f-mono); font-size: 13px; opacity: .75; }
+.colophon {
+  margin-top: 34px; padding-top: 18px; border-top: 1px solid var(--rule-soft);
+  font-family: var(--f-mono); font-size: 11.5px; line-height: 1.7;
+  color: var(--ink-3); letter-spacing: .04em;
+}
+
+/* ---------- motion ---------- */
+
+@keyframes spin { to { transform: rotate(-360deg); } }
+.roadspin { animation: spin 150s linear infinite; transform-origin: 500px 194px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .roadspin { animation: none; }
+  * { scroll-behavior: auto !important; }
+}
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header class="topbar">
+    <b>XReal Workbench</b>
+    <span>Air&nbsp;2&nbsp;Pro</span>
+    <span class="spacer"></span>
+    <span>macOS&nbsp;13+ · iOS&nbsp;17+</span>
+    <span>MIT</span>
+  </header>
+</div>
+
+<div class="wrap hero">
+  <div class="hero-grid">
+    <div class="head" style="margin-bottom:0">
+      <span class="eyebrow">Две программы для очков дополненной реальности</span>
+      <h1>Чёрный —<br>это прозрачный.</h1>
+    </div>
+
+    <p class="lede">
+      В микро-OLED дисплее очков чёрный пиксель не светится, а значит его попросту нет.
+      Всё, что нарисовано на чёрном, висит поверх реального мира. Из этого следует
+      весь интерфейс на этой странице.
+    </p>
+
+    <!-- FIG 1 — the HUD as seen through the glasses -->
+    <figure>
+      <div class="fig-head">
+        <span class="n">Fig.&nbsp;1</span>
+        <span class="t">GlassesHUD · кадр 1920 × 1080 · вид через правую линзу</span>
+      </div>
+      <div class="screen">
+        <svg viewBox="0 0 640 360" role="img" aria-label="Навигационный дисплей: скорость 43 километра в час, курс 320 градусов, высота 154 метра, маршрут 3.3 километра, справа панель дорог с пунктиром маршрута">
+          <defs>
+            <clipPath id="roadclip"><rect x="392" y="40" width="216" height="192" rx="5"></rect></clipPath>
+          </defs>
+
+          <!-- left column: readouts -->
+          <g font-family="Archivo, Helvetica Neue, sans-serif" fill="#7DF3B4">
+            <text x="34" y="86" font-size="62" font-weight="800" letter-spacing="-2">43</text>
+            <text x="126" y="86" font-size="17" font-weight="600" fill="rgba(125,243,180,.55)">km/h</text>
+
+            <text x="34" y="140" font-size="36" font-weight="700" letter-spacing="-1">320°</text>
+            <text x="128" y="140" font-size="18" font-weight="600" fill="rgba(125,243,180,.55)">NW</text>
+
+            <text x="34" y="184" font-size="28" font-weight="600">154 m</text>
+            <text x="126" y="184" font-size="13" font-weight="600" fill="rgba(125,243,180,.55)">ALT</text>
+
+            <!-- route block with arrow -->
+            <g transform="translate(34 206)">
+              <path d="M13 0 L26 32 L13 25 L0 32 Z" fill="#7DF3B4" transform="rotate(28 13 16)"></path>
+              <text x="40" y="26" font-size="29" font-weight="700" letter-spacing="-.6">3.3 km</text>
+              <text x="41" y="44" font-size="12.5" font-weight="600" fill="rgba(125,243,180,.55)" letter-spacing="1.2">ROUTE · 7 MIN</text>
+            </g>
+
+            <text x="34" y="326" font-size="25" font-weight="600">10:37</text>
+            <text x="114" y="326" font-size="12" font-weight="600" fill="rgba(125,243,180,.55)" letter-spacing=".8">GPS ±5 m</text>
+          </g>
+
+          <!-- right: roads panel -->
+          <text x="608" y="30" text-anchor="end" font-family="Archivo, sans-serif" font-size="17" font-weight="700" fill="#7DF3B4">Тверская улица</text>
+          <rect x="392" y="40" width="216" height="192" rx="5" fill="none" stroke="rgba(125,243,180,.28)"></rect>
+
+          <g clip-path="url(#roadclip)">
+            <g class="roadspin">
+              <!-- minor roads -->
+              <g fill="none" stroke="#7DF3B4" stroke-linecap="round" stroke-opacity=".38" stroke-width="1.6">
+                <path d="M566 36 L520 244"></path>
+                <path d="M402 82 L620 122"></path>
+                <path d="M392 178 L606 216"></path>
+                <path d="M468 24 L446 228"></path>
+                <path d="M370 134 L568 166"></path>
+                <path d="M602 42 L576 240"></path>
+              </g>
+              <!-- secondary -->
+              <g fill="none" stroke="#7DF3B4" stroke-linecap="round" stroke-opacity=".62" stroke-width="3">
+                <path d="M352 70 L642 118"></path>
+                <path d="M524 14 L494 250"></path>
+              </g>
+              <!-- the street you are on -->
+              <path d="M340 160 C 410 152, 466 138, 512 122 C 562 104, 618 90, 664 82"
+                    fill="none" stroke="#7DF3B4" stroke-width="5.4" stroke-linecap="round"></path>
+              <!-- route, dashed -->
+              <path d="M500 206 C 506 178, 512 142, 512 122 C 562 104, 618 90, 664 82"
+                    fill="none" stroke="#FF8A3D" stroke-width="3.4" stroke-linecap="round"
+                    stroke-dasharray="9 7" stroke-opacity=".92"></path>
+            </g>
+          </g>
+          <!-- you -->
+          <path d="M500 185 L507.5 205 L500 200 L492.5 205 Z" fill="#FF8A3D"></path>
+        </svg>
+      </div>
+      <figcaption>
+        Слева показания столбцом, справа только линии дорог — без подложки, без домов, без
+        подписей. Геометрия из OpenStreetMap, панель развёрнута по курсу, впереди <b>100&nbsp;м</b>
+        дороги. Улица, по которой едешь, толще остальных. Оранжевый пунктир — маршрут от MapKit.
+      </figcaption>
+    </figure>
+
+    <div class="hero-sub">
+      <p class="prose">
+        Очки XReal Air 2 Pro подключаются по USB-C и для компьютера выглядят обычным монитором
+        1920&nbsp;×&nbsp;1080. Внутри у них гироскоп и микроконтроллер, который умеет переключать
+        панель в стереорежим. Штатная программа этого не показывает. Здесь — две открытые,
+        которые показывают.
+      </p>
+      <div class="stamp">
+        <div class="row"><span>Панель</span><span>1920 × 1080 @ 120 Гц</span></div>
+        <div class="row"><span>Стерео</span><span>3840 × 1080 @ 60 Гц</span></div>
+        <div class="row"><span>Датчик</span><span>ICM-42688-P</span></div>
+        <div class="row"><span>Шина</span><span>USB-C DP Alt Mode</span></div>
+        <div class="row"><span>Лицензия</span><span>MIT</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ TWO APPS ============ -->
+<div class="wrap sep">
+  <section>
+    <div class="head">
+      <span class="eyebrow">Что внутри</span>
+      <h2>Одни очки, два рабочих места</h2>
+    </div>
+
+    <div class="apps">
+      <article class="app">
+        <span class="plat">macOS · строка меню · опубликовано</span>
+        <h3>UltraXReal — Cinema Edition</h3>
+        <p class="prose" style="font-size:16px">
+          Форк проекта DannyDesert, переписанный под четыре явных режима. Умеет то, чего не умеет
+          ни один сторонний Mac-софт: переключать сами очки между 2D и стерео по USB&nbsp;HID.
+        </p>
+        <ul>
+          <li>Кино на весь экран очков, звук — в динамики очков</li>
+          <li>Двойной стук по дужке ставит на паузу</li>
+          <li>Стерео-сцена с отслеживанием головы</li>
+          <li>Выдернул кабель — всё гаснет мгновенно</li>
+        </ul>
+      </article>
+
+      <article class="app">
+        <span class="plat">iOS · внешний дисплей · прототип</span>
+        <h3>GlassesHUD</h3>
+        <p class="prose" style="font-size:16px">
+          iPhone отдаёт в очки не копию своего экрана, а отдельную сцену. На телефоне карта и
+          настройки, в очках — только приборы поверх дороги.
+        </p>
+        <ul>
+          <li>Скорость, курс, высота, часы, точность GPS</li>
+          <li>Дороги вокруг, развёрнутые по движению</li>
+          <li>Маршрут к точке пунктиром</li>
+          <li>Курс на 50 Гц: GPS плюс гироскоп телефона</li>
+        </ul>
+      </article>
+    </div>
+  </section>
+</div>
+
+<!-- ============ STEREO ============ -->
+<div class="wrap sep">
+  <section>
+    <div class="head">
+      <span class="eyebrow">Режим 4 · Demo: 3D</span>
+      <h2>Кадр, разрезанный надвое</h2>
+      <p class="prose">
+        Команда <code>0x03</code> на микроконтроллер — и очки перецепляются к системе уже как
+        дисплей 3840&nbsp;×&nbsp;1080. Левая половина кадра уходит левому глазу, правая правому.
+        Программа рисует сцену дважды, разведя камеры на 63&nbsp;мм, и вы оказываетесь
+        в середине Стоунхенджа.
+      </p>
+    </div>
+
+    <figure>
+      <div class="fig-head">
+        <span class="n">Fig.&nbsp;2</span>
+        <span class="t">Side-by-side · 3840 × 1080 · левый и правый глаз</span>
+      </div>
+      <div class="screen">
+        <div class="eyes">
+          <div class="eye">
+            <span class="eye-tag">L</span>
+            <svg viewBox="0 0 320 180" role="img" aria-label="Вид левого глаза: каменные трилиты Стоунхенджа на фоне голубого неба">
+              <defs>
+                <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#1F5FB8"></stop>
+                  <stop offset=".62" stop-color="#7FB2E4"></stop>
+                  <stop offset="1" stop-color="#C6DCEF"></stop>
+                </linearGradient>
+                <linearGradient id="turf" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0" stop-color="#5C8438"></stop>
+                  <stop offset="1" stop-color="#2E4A18"></stop>
+                </linearGradient>
+
+                <!-- far ring -->
+                <g id="hfar">
+                  <g fill="#8A8880">
+                    <path d="M14 96 l10 -1 l1 26 l-11 1 Z"></path>
+                    <path d="M34 97 l9 -1 l1 25 l-10 1 Z"></path>
+                    <path d="M52 98 l9 -1 l1 24 l-10 1 Z"></path>
+                    <path d="M243 97 l9 -1 l1 25 l-10 1 Z"></path>
+                    <path d="M262 96 l10 -1 l1 26 l-11 1 Z"></path>
+                    <path d="M286 98 l9 -1 l1 24 l-10 1 Z"></path>
+                  </g>
+                  <g fill="#9E9C93">
+                    <rect x="13" y="92" width="49" height="5"></rect>
+                    <rect x="242" y="92" width="54" height="5"></rect>
+                  </g>
+                </g>
+
+                <!-- near trilithons -->
+                <g id="hnear">
+                  <g>
+                    <path d="M60 62 l26 -3 l3 96 l-29 3 Z" fill="#A8A69C"></path>
+                    <path d="M86 59 l7 2 l2 94 l-6 -1 Z" fill="#83817A"></path>
+                    <path d="M124 60 l25 -3 l3 95 l-28 3 Z" fill="#A8A69C"></path>
+                    <path d="M149 57 l7 2 l2 93 l-6 -1 Z" fill="#83817A"></path>
+                    <path d="M56 54 l98 -9 l2 12 l-98 9 Z" fill="#B4B2A8"></path>
+                    <path d="M154 45 l8 2 l2 12 l-8 -2 Z" fill="#8C8A82"></path>
+                  </g>
+                  <g>
+                    <path d="M214 68 l24 -3 l2 88 l-26 3 Z" fill="#A5A399"></path>
+                    <path d="M238 65 l6 2 l2 86 l-6 -1 Z" fill="#807E77"></path>
+                  </g>
+                  <path d="M170 146 l52 -5 l2 10 l-53 5 Z" fill="#9B998F"></path>
+                </g>
+
+                <g id="hshadow" fill="#1B2E10" opacity=".42">
+                  <path d="M60 158 l34 -6 l24 8 l-38 7 Z"></path>
+                  <path d="M124 155 l32 -6 l24 8 l-36 7 Z"></path>
+                  <path d="M214 156 l28 -5 l20 7 l-32 6 Z"></path>
+                </g>
+              </defs>
+
+              <rect width="320" height="180" fill="url(#sky)"></rect>
+              <circle cx="252" cy="34" r="13" fill="#FFF6DE" opacity=".95"></circle>
+              <circle cx="252" cy="34" r="26" fill="#FFF6DE" opacity=".16"></circle>
+              <g fill="#FFFFFF" opacity=".5">
+                <ellipse cx="78" cy="30" rx="44" ry="8"></ellipse>
+                <ellipse cx="112" cy="26" rx="26" ry="7"></ellipse>
+                <ellipse cx="196" cy="48" rx="34" ry="6"></ellipse>
+              </g>
+              <path d="M0 96 Q 80 88, 160 93 T 320 90 L320 104 L0 104 Z" fill="#4C6B3E" opacity=".75"></path>
+              <rect y="98" width="320" height="82" fill="url(#turf)"></rect>
+              <use href="#hfar" x="1"></use>
+              <use href="#hshadow" x="4"></use>
+              <use href="#hnear" x="5"></use>
+            </svg>
+          </div>
+
+          <div class="eye">
+            <span class="eye-tag">R</span>
+            <svg viewBox="0 0 320 180" role="img" aria-label="Вид правого глаза: та же сцена со смещением, дающим объём">
+              <rect width="320" height="180" fill="url(#sky)"></rect>
+              <circle cx="251" cy="34" r="13" fill="#FFF6DE" opacity=".95"></circle>
+              <circle cx="251" cy="34" r="26" fill="#FFF6DE" opacity=".16"></circle>
+              <g fill="#FFFFFF" opacity=".5">
+                <ellipse cx="77" cy="30" rx="44" ry="8"></ellipse>
+                <ellipse cx="111" cy="26" rx="26" ry="7"></ellipse>
+                <ellipse cx="195" cy="48" rx="34" ry="6"></ellipse>
+              </g>
+              <path d="M0 96 Q 80 88, 160 93 T 320 90 L320 104 L0 104 Z" fill="#4C6B3E" opacity=".75"></path>
+              <rect y="98" width="320" height="82" fill="url(#turf)"></rect>
+              <use href="#hfar" x="-1"></use>
+              <use href="#hshadow" x="-4"></use>
+              <use href="#hnear" x="-5"></use>
+            </svg>
+          </div>
+        </div>
+      </div>
+      <figcaption>
+        Половины различаются: дальнее кольцо сдвинуто на пару пикселей, ближние трилиты — на
+        десяток. Эта разница и есть глубина. Переключение туда и обратно занимает
+        <b>8–25 секунд</b>: очки успевают отвалиться от системы и подняться заново.
+      </figcaption>
+    </figure>
+  </section>
+</div>
+
+<!-- ============ MODES ============ -->
+<div class="wrap sep">
+  <section>
+    <div class="head">
+      <span class="eyebrow">UltraXReal · строка меню macOS</span>
+      <h2>Четыре режима, один активный</h2>
+      <p class="prose">
+        Переключаются горячими клавишами. Каждый переход сам сворачивает предыдущий режим
+        и возвращает очкам исходное состояние.
+      </p>
+    </div>
+
+    <div class="modes">
+      <div class="mode">
+        <span class="key">⌘ 1</span>
+        <span class="name">Extended Display</span>
+        <span class="what">Очки — обычный второй монитор в родных 1920 × 1080 при 120 Гц. Программа сама выбирает этот режим при запуске и при каждом подключении.</span>
+      </div>
+      <div class="mode">
+        <span class="key">⌘ 2</span>
+        <span class="name">Mirror Main Display</span>
+        <span class="what">Зеркало встроенного экрана. Переустанавливается само, если очки переподключились с новым идентификатором дисплея.</span>
+      </div>
+      <div class="mode">
+        <span class="key">⌘ 3</span>
+        <span class="name">Cinema</span>
+        <span class="what">Видео на весь экран очков и больше нигде. Звук уходит в динамики очков напрямую. Перемотка и громкость прямо в меню, пауза — двойным стуком по дужке.</span>
+      </div>
+      <div class="mode">
+        <span class="key">⌘ 4</span>
+        <span class="name">Demo: 3D</span>
+        <span class="what">Очки уходят в стерео, вокруг вырастает Стоунхендж: сарсеновое кольцо, пять трилитов, голубые камни. Поворот головы двигает вид, ⌘⇧R центрует.</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ HOW ============ -->
+<div class="wrap sep">
+  <section>
+    <div class="head">
+      <span class="eyebrow">Под капотом</span>
+      <h2>Откуда берётся каждая цифра</h2>
+    </div>
+
+    <div class="how">
+      <article>
+        <h3><span class="tag">USB HID</span></h3>
+        <p class="prose">
+          У очков есть служебный канал к микроконтроллеру — тот же, по которому работает
+          открытый драйвер для Linux. Через него читается и задаётся режим панели. На Air 2 Pro
+          проверены два кода: <code>0x03</code> — стерео, <code>0x0B</code> — заводской 2D
+          со 120 Гц. Программа запоминает прочитанный код и возвращает именно его.
+        </p>
+      </article>
+
+      <article>
+        <h3><span class="tag">Гироскоп</span></h3>
+        <p class="prose">
+          В очках стоит ICM-42688-P. Драйвер гонит гироскоп и акселерометр через фильтр
+          Маджвика и отдаёт кватернион поворота головы. Оттуда же берутся стуки по корпусу:
+          резкий пик линейного ускорения выше <code>0.6 g</code>, два подряд за полсекунды —
+          пауза.
+        </p>
+      </article>
+
+      <article>
+        <h3><span class="tag">Счисление пути</span></h3>
+        <p class="prose">
+          GPS в iPhone отдаёт координату раз в секунду, и этого мало для плавной карты. Между
+          фиксами курс ведёт гироскоп телефона на 50 Гц — вокруг вертикали, поэтому неважно,
+          как лежит телефон. Позиция дорисовывается по последней скорости вдоль курса,
+          не дальше двух секунд вперёд.
+        </p>
+      </article>
+
+      <article>
+        <h3><span class="tag">Дороги</span></h3>
+        <p class="prose">
+          Геометрия тянется из OpenStreetMap через Overpass: квадрат около двух километров
+          вокруг, заново после 400 метров пути. Рисуется на чистом холсте покадрово,
+          поэтому карта поворачивается плавно, а не рывками раз в секунду.
+        </p>
+      </article>
+    </div>
+  </section>
+</div>
+
+<!-- ============ SPECS ============ -->
+<div class="wrap sep">
+  <section>
+    <div class="head">
+      <span class="eyebrow">Проверено на железе</span>
+      <h2>Числа</h2>
+      <p class="prose">
+        Всё измерено на XReal Air 2 Pro и macOS 26. Остальные модели Air драйвер опознаёт,
+        но коды микроконтроллера на них не проверялись.
+      </p>
+    </div>
+
+    <div class="specs">
+      <div class="spec"><span class="v">1920<small>×1080</small></span><span class="l">на каждый глаз</span></div>
+      <div class="spec"><span class="v">120 <small>Гц</small></span><span class="l">в режиме 2D</span></div>
+      <div class="spec"><span class="v">63 <small>мм</small></span><span class="l">межзрачковое</span></div>
+      <div class="spec"><span class="v">46°</span><span class="l">по диагонали</span></div>
+      <div class="spec"><span class="v">50 <small>Гц</small></span><span class="l">курс от гироскопа</span></div>
+      <div class="spec"><span class="v">100 <small>м</small></span><span class="l">дороги впереди</span></div>
+      <div class="spec"><span class="v">0.6 <small>g</small></span><span class="l">порог стука</span></div>
+      <div class="spec"><span class="v">2 <small>сек</small></span><span class="l">возврат в 2D при выходе</span></div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ LIMITS ============ -->
+<div class="wrap sep">
+  <section>
+    <div class="head">
+      <span class="eyebrow">Честно</span>
+      <h2>Чего эти программы не умеют</h2>
+    </div>
+
+    <div class="limits">
+      <div class="limit">
+        <span class="m">iOS</span>
+        <span>Отслеживания головы нет. Сторонним приложениям на iPhone закрыт доступ к USB-интерфейсам очков, поэтому приборы держатся перед глазами, как обычный монитор.</span>
+      </div>
+      <div class="limit">
+        <span class="m">Экран</span>
+        <span>Телефон нельзя блокировать: iOS замораживает сцену внешнего дисплея. Программа сама держит телефон бодрым и гасит его яркость в ноль.</span>
+      </div>
+      <div class="limit">
+        <span class="m">Сеть</span>
+        <span>Дороги и маршрут требуют интернета. Офлайн остаётся только последний загруженный квадрат.</span>
+      </div>
+      <div class="limit">
+        <span class="m">3 DoF</span>
+        <span>Очки знают только поворот головы, но не её положение в пространстве. Шаг в сторону сцену не сдвинет.</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<!-- ============ FOOT ============ -->
+<div class="wrap">
+  <section class="foot">
+    <div class="head">
+      <span class="eyebrow">Исходники</span>
+      <h2>Забрать и собрать</h2>
+      <p class="prose">
+        UltraXReal открыт под MIT: собирается в Xcode и живёт в строке меню. GlassesHUD пока
+        прототип, его исходники ещё не выложены.
+      </p>
+    </div>
+    <div class="btnrow">
+      <a class="btn" href="https://github.com/AlexeySpiridonov/XReal-Ultrawide-cinemaEd">
+        UltraXReal · GitHub <span class="arrow">↗</span>
+      </a>
+      <a class="btn ghost" href="https://github.com/DannyDesert/XReal-Ultrawide">
+        Исходный проект <span class="arrow">↗</span>
+      </a>
+    </div>
+
+    <div class="colophon">
+      Собрано на основе UltraXReal (DannyDesert), драйвера xrealair-sdk-macos (adidoes),
+      фильтра Fusion (xioTechnologies), протокола микроконтроллера из nrealAirLinuxDriver
+      (TheJackiMonster) и hidapi. Картография — OpenStreetMap, маршруты — MapKit.<br>
+      XREAL и Air 2 Pro — товарные знаки их владельцев. Проекты не связаны с XREAL.
+    </div>
+  </section>
+</div>
+
+</body>
+</html>

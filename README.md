@@ -3,6 +3,8 @@
 macOS menu bar app for XReal Air glasses. A fork of [DannyDesert/XReal-Ultrawide](https://github.com/DannyDesert/XReal-Ultrawide)
 that replaces the virtual ultrawide display with four explicit modes and adds USB control of the glasses.
 
+**[→ Промо-страница / Project page](https://alexeyspiridonov.github.io/XReal-Ultrawide-cinemaEd/)** — что это выглядит в очках, как устроено и какие цифры замерены.
+
 ## Modes
 
 | ⌘ | Mode | What it does |
